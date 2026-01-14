@@ -9,13 +9,13 @@ The system focuses on correctness, transparency, and audit readiness, turning ra
 ## Project Resources
 
 - **Problem Statement & Design Docs (Notion)**  
-  https://www.notion.so/hackathon-257a0ebae6ec800799bffad380063f2d
+  <https://www.notion.so/hackathon-257a0ebae6ec800799bffad380063f2d>
 
 - **AI Design & Reasoning Log (ChatGPT)**  
-  https://chatgpt.com/c/6967c557-c610-8322-beeb-e68d5bd7f4a2
+  <https://chatgpt.com/c/6967c557-c610-8322-beeb-e68d5bd7f4a2>
 
 - **BRSR Regulatory RAG Pipeline (Reference Tooling)**  
-  https://github.com/About-Rudra/BRSR-RAG
+  <https://github.com/About-Rudra/BRSR-RAG>
 
 ---
 
