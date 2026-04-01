@@ -1,5 +1,56 @@
-/* eslint-disable react-hooks/set-state-in-effect */
+/* eslint-disable react-hooks/exhaustive-deps */
 import { useState, useEffect } from "react";
+import { supabase } from "../lib/supabase";
+
+const styles = `
+  @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes spin { to { transform: rotate(360deg) } }
+  @keyframes pulse { 0%, 100% { opacity: 0.35 } 50% { opacity: 1 } }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
+`;
+
+function FullscreenLoader({ message }) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "#0a0a0a",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 9999,
+        animation: "fadeIn 0.25s ease",
+      }}
+    >
+      <div style={{ position: "relative", marginBottom: "28px" }}>
+        <div
+          style={{
+            width: "44px",
+            height: "44px",
+            borderRadius: "50%",
+            border: "1.5px solid #1f1f1f",
+            borderTop: "1.5px solid #059669",
+            animation: "spin 0.75s linear infinite",
+          }}
+        />
+      </div>
+      <p
+        style={{
+          fontFamily: "'Geist Mono', 'Courier New', monospace",
+          fontSize: "10px",
+          letterSpacing: "0.18em",
+          textTransform: "uppercase",
+          color: "#059669",
+          animation: "pulse 1.6s ease-in-out infinite",
+        }}
+      >
+        {message}
+      </p>
+    </div>
+  );
+}
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -8,44 +59,211 @@ export default function Auth() {
   const [companyName, setCompanyName] = useState("");
   const [gstNumber, setGstNumber] = useState("");
   const [loading, setLoading] = useState(false);
+  const [initializing, setInitializing] = useState(true);
+  const [transitioning, setTransitioning] = useState(false);
+  const [transitionMessage, setTransitionMessage] =
+    useState("Authenticating...");
   const [error, setError] = useState(null);
+  const [message, setMessage] = useState(null);
+
+  const API_URL = import.meta.env.VITE_API_URL;
+
+  const syncWithBackend = async (token) => {
+    const response = await fetch(`${API_URL}/api/auth/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ token }),
+    });
+    if (!response.ok) throw new Error("Failed to sync with backend");
+  };
+
+  const redirectToHome = async (msg) => {
+    setTransitionMessage(msg);
+    setTransitioning(true);
+    await new Promise((r) => setTimeout(r, 900));
+    window.location.href = "/home";
+  };
+
+  useEffect(() => {
+    const handleAuth = async () => {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get("access_token");
+
+      if (accessToken) {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: hashParams.get("refresh_token"),
+        });
+
+        if (error || !session) {
+          setInitializing(false);
+          return;
+        }
+
+        window.history.replaceState(
+          {},
+          document.title,
+          window.location.pathname,
+        );
+
+        try {
+          await syncWithBackend(session.access_token);
+          await redirectToHome("Signing in...");
+        } catch {
+          setError("Failed to complete sign in. Please try again.");
+          setInitializing(false);
+        }
+        return;
+      }
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session) {
+        try {
+          await syncWithBackend(session.access_token);
+          await redirectToHome("Resuming session...");
+        } catch {
+          await supabase.auth.signOut();
+        }
+      }
+
+      setInitializing(false);
+    };
+
+    handleAuth();
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("mode") === "signup") {
-      setIsLogin(false);
-    }
+    const mode = params.get("mode");
+
+    setIsLogin(mode !== "signup");
   }, []);
 
-  const handleGoogleLogin = () => {
-    console.log("Google login triggered");
+  const handleGoogleLogin = async () => {
+    setTransitionMessage("Redirecting to Google...");
+    setTransitioning(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.origin + "/auth" },
+    });
+    if (error) {
+      setTransitioning(false);
+      setError(error.message);
+    }
   };
 
-  const handleMicrosoftLogin = () => {
-    console.log("Microsoft login triggered");
+  const handleMicrosoftLogin = async () => {
+    setTransitionMessage("Redirecting to Microsoft...");
+    setTransitioning(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "azure",
+      options: { redirectTo: window.location.origin + "/auth" },
+    });
+    if (error) {
+      setTransitioning(false);
+      setError(error.message);
+    }
   };
 
-  const handleEmailAuth = (e) => {
+  const handleEmailAuth = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setMessage(null);
 
-    // Mocking a network request delay
-    setTimeout(() => {
+    try {
+      if (isLogin) {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw new Error(error.message);
+        if (!data.session) throw new Error("Login failed. Please try again.");
+        await syncWithBackend(data.session.access_token);
+        await redirectToHome("Signing in...");
+      } else {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { company_name: companyName, gst_number: gstNumber },
+          },
+        });
+        if (error) throw new Error(error.message);
+        if (!data.session) {
+          setMessage(
+            "Check your email to confirm your account before signing in.",
+          );
+          setLoading(false);
+          return;
+        }
+        await syncWithBackend(data.session.access_token);
+        await redirectToHome("Creating your workspace...");
+      }
+    } catch (err) {
+      setError(err.message);
       setLoading(false);
-      console.log("Auth submitted:", {
-        isLogin,
-        email,
-        companyName,
-        gstNumber,
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setError("Please enter your email address first");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
       });
-      // If using React Router, you would do: navigate('/dashboard')
-      // window.location.href = "/dashboard";
-    }, 1000);
+      if (error) throw error;
+      setMessage("Password reset link sent to your email.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (initializing || transitioning) {
+    return (
+      <>
+        <style>{styles}</style>
+        <FullscreenLoader
+          message={transitioning ? transitionMessage : "Loading..."}
+        />
+      </>
+    );
+  }
+
+  const toggleMode = () => {
+    const nextMode = isLogin ? "signup" : "login";
+
+    setIsLogin(!isLogin);
+    setError(null);
+    setMessage(null);
+
+    const newUrl = new URL(window.location.href);
+    newUrl.searchParams.set("mode", nextMode);
+    window.history.replaceState({}, "", newUrl);
   };
 
   return (
-    <div className="h-screen flex overflow-hidden bg-white text-neutral-900 antialiased selection:bg-emerald-600 selection:text-white">
+    <div
+      className="h-screen flex overflow-hidden bg-white text-neutral-900 antialiased selection:bg-emerald-600 selection:text-white"
+      style={{ animation: "slideUp 0.35s ease both" }}
+    >
+      <style>{styles}</style>
+
       <div className="hidden lg:flex lg:w-[45%] h-full bg-neutral-950 p-16 flex-col justify-between relative overflow-hidden border-r border-neutral-900">
         <div
           className="absolute inset-0 opacity-[0.05] pointer-events-none"
@@ -64,22 +282,19 @@ export default function Auth() {
         </div>
 
         <div className="relative z-10 border-t border-neutral-800 pt-8">
-          <div>
-            <p
-              className="text-[11px] text-emerald-500 uppercase tracking-widest font-bold mb-2"
-              style={{ fontFamily: "'Geist Mono', monospace" }}
-            >
-              SYSTEM_STATUS
-            </p>
-            <p className="text-[14px] text-neutral-300 font-medium">
-              All telemetry pipelines active.
-            </p>
-          </div>
+          <p
+            className="text-[11px] text-emerald-500 uppercase tracking-widest font-bold mb-2"
+            style={{ fontFamily: "'Geist Mono', monospace" }}
+          >
+            SYSTEM_STATUS
+          </p>
+          <p className="text-[14px] text-neutral-300 font-medium">
+            All telemetry pipelines active.
+          </p>
         </div>
       </div>
 
       <div className="flex-1 h-full overflow-y-auto flex flex-col justify-between p-6 sm:p-12 lg:p-24 bg-white relative">
-        {/* BACK TO WEBSITE BUTTON */}
         <div className="absolute top-6 left-6 sm:top-10 sm:left-10 z-10">
           <a
             href="/"
@@ -129,7 +344,8 @@ export default function Auth() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <button
                 onClick={handleGoogleLogin}
-                className="flex items-center justify-center gap-3 px-6 py-3.5 bg-white border border-neutral-200 rounded-lg shadow-sm hover:bg-neutral-50 hover:border-neutral-300 transition-colors cursor-pointer group w-full"
+                disabled={loading}
+                className="flex items-center justify-center gap-3 px-6 py-3.5 bg-white border border-neutral-200 rounded-lg shadow-sm hover:bg-neutral-50 hover:border-neutral-300 transition-colors cursor-pointer group w-full disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path
@@ -156,7 +372,8 @@ export default function Auth() {
 
               <button
                 onClick={handleMicrosoftLogin}
-                className="flex items-center justify-center gap-3 px-6 py-3.5 bg-white border border-neutral-200 rounded-lg shadow-sm hover:bg-neutral-50 hover:border-neutral-300 transition-colors cursor-pointer group w-full"
+                disabled={loading}
+                className="flex items-center justify-center gap-3 px-6 py-3.5 bg-white border border-neutral-200 rounded-lg shadow-sm hover:bg-neutral-50 hover:border-neutral-300 transition-colors cursor-pointer group w-full disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg className="w-5 h-5" viewBox="0 0 21 21">
                   <path d="M1 1h9v9H1z" fill="#F25022" />
@@ -182,8 +399,22 @@ export default function Auth() {
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div
+                className="bg-red-50 border border-red-200 rounded-lg p-4"
+                style={{ animation: "slideUp 0.2s ease" }}
+              >
                 <p className="text-red-600 text-sm font-medium">{error}</p>
+              </div>
+            )}
+
+            {message && (
+              <div
+                className="bg-emerald-50 border border-emerald-200 rounded-lg p-4"
+                style={{ animation: "slideUp 0.2s ease" }}
+              >
+                <p className="text-emerald-700 text-sm font-medium">
+                  {message}
+                </p>
               </div>
             )}
 
@@ -203,7 +434,6 @@ export default function Auth() {
                       className="w-full text-[14px] rounded-lg px-4 py-4 outline-none border border-neutral-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/10 bg-neutral-50/50 focus:bg-white text-neutral-950 placeholder-neutral-400 font-medium transition-all shadow-sm"
                     />
                   </div>
-
                   <div className="space-y-2">
                     <label className="text-[11px] font-bold text-neutral-700 uppercase tracking-widest ml-1">
                       GST Number
@@ -240,13 +470,13 @@ export default function Auth() {
                     Password
                   </label>
                   {isLogin && (
-                    <a
-                      href="#"
-                      className="text-[11px] font-bold text-emerald-600 uppercase tracking-widest cursor-pointer"
-                      onClick={(e) => e.preventDefault()}
+                    <button
+                      type="button"
+                      onClick={handleForgotPassword}
+                      className="text-[11px] font-bold text-emerald-600 uppercase tracking-widest cursor-pointer hover:text-emerald-700"
                     >
                       Forgot Password?
-                    </a>
+                    </button>
                   )}
                 </div>
                 <input
@@ -263,13 +493,28 @@ export default function Auth() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-neutral-950 text-white rounded-lg shadow-md text-[13px] font-bold px-4 py-4 hover:bg-neutral-800 transition-colors uppercase tracking-widest cursor-pointer mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-neutral-950 text-white rounded-lg shadow-md text-[13px] font-bold px-4 py-4 hover:bg-neutral-800 transition-colors uppercase tracking-widest cursor-pointer mt-4 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {loading
-                  ? "Processing..."
-                  : isLogin
-                    ? "Sign In"
-                    : "Create Workspace"}
+                {loading ? (
+                  <span className="flex items-center justify-center gap-3">
+                    <span
+                      style={{
+                        width: "13px",
+                        height: "13px",
+                        borderRadius: "50%",
+                        border: "1.5px solid rgba(255,255,255,0.25)",
+                        borderTop: "1.5px solid #fff",
+                        display: "inline-block",
+                        animation: "spin 0.7s linear infinite",
+                      }}
+                    />
+                    Processing...
+                  </span>
+                ) : isLogin ? (
+                  "Sign In"
+                ) : (
+                  "Create Workspace"
+                )}
               </button>
             </form>
 
@@ -280,16 +525,7 @@ export default function Auth() {
                   : "Already have an account? "}
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsLogin(!isLogin);
-                    setError(null);
-                    const newUrl = new URL(window.location.href);
-                    newUrl.searchParams.set(
-                      "mode",
-                      !isLogin ? "login" : "signup",
-                    );
-                    window.history.replaceState({}, "", newUrl);
-                  }}
+                  onClick={toggleMode}
                   className="text-neutral-950 font-bold cursor-pointer"
                 >
                   {isLogin ? "Create Workspace" : "Sign In"}

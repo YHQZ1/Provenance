@@ -2,47 +2,43 @@ import { supabaseAdmin } from "../config/database.js";
 
 export const authenticate = async (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization;
+    let token = req.cookies?.token;
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({
-        error: "Unauthorized",
-        message: "Missing or invalid token",
-      });
+    if (!token) {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        token = authHeader.split(" ")[1];
+      }
     }
 
-    const token = authHeader.replace("Bearer ", "").trim();
+    if (!token) {
+      return res
+        .status(401)
+        .json({ success: false, message: "No token provided" });
+    }
 
     const {
       data: { user },
       error,
     } = await supabaseAdmin.auth.getUser(token);
 
-    if (error) {
-      return res.status(401).json({
-        error: "Unauthorized",
-        message: error.message,
-      });
+    if (error || !user) {
+      return res.status(401).json({ success: false, message: "Invalid token" });
     }
 
-    if (!user) {
-      return res.status(401).json({
-        error: "Unauthorized",
-        message: "User not found",
-      });
-    }
+    const { data: company } = await supabaseAdmin
+      .from("companies")
+      .select("*")
+      .eq("id", user.id)
+      .single();
 
-    req.user = {
-      id: user.id,
-      email: user.email,
-      raw: user,
-    };
+    req.user = { id: user.id, email: user.email };
+    req.company = company;
 
     next();
   } catch (err) {
-    return res.status(401).json({
-      error: "Unauthorized",
-      message: "Authentication failed",
-    });
+    return res
+      .status(401)
+      .json({ success: false, message: "Authentication failed" });
   }
 };
