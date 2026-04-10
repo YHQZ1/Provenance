@@ -1,9 +1,8 @@
+import { env } from "../config/env.js";
+
 export const errorHandler = (err, req, res, next) => {
-  console.error("[Error]", err);
+  const isDev = env.NODE_ENV === "development";
 
-  const isDev = process.env.NODE_ENV === "development";
-
-  // Multer errors
   if (err.name === "MulterError") {
     return res.status(400).json({
       success: false,
@@ -11,7 +10,6 @@ export const errorHandler = (err, req, res, next) => {
     });
   }
 
-  // Validation errors
   if (err.name === "ValidationError") {
     return res.status(400).json({
       success: false,
@@ -20,10 +18,14 @@ export const errorHandler = (err, req, res, next) => {
     });
   }
 
-  // Default
-  res.status(err.status || 500).json({
+  const statusCode = err.status || err.statusCode || 500;
+
+  console.error(`Error [${statusCode}]:`, err.message);
+  if (isDev && err.stack) console.error(err.stack);
+
+  res.status(statusCode).json({
     success: false,
-    message: isDev ? err.message : "Internal server error",
+    message: isDev || statusCode < 500 ? err.message : "Internal server error",
     ...(isDev && { stack: err.stack }),
   });
 };

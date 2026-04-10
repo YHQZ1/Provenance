@@ -1,105 +1,103 @@
-import axios from "axios";
-import { env } from "../../config/env.js";
+import { supabaseAdmin } from "../../config/database.js";
 
-const OCR_URL = env.OCR_SERVICE_URL || "http://ocr-service:8000";
+const MOCK_OCR_RESULTS = [
+  {
+    raw_text:
+      "INVOICE #12345\nSupplier: Plastic Recyclers Inc.\nDate: 2024-01-15\n\nItems:\n1. PET Bottles Clear - 500 kg\n2. HDPE Containers Natural - 300 kg\n3. PP Scrap Mixed - 200 kg\nTotal: 1000 kg",
+    extracted_data: {
+      items: [
+        { description: "PET Bottles Clear", quantity: 500, unit: "kg" },
+        { description: "HDPE Containers Natural", quantity: 300, unit: "kg" },
+        { description: "PP Scrap Mixed", quantity: 200, unit: "kg" },
+      ],
+      confidence: 0.95,
+    },
+    confidence: 0.95,
+  },
+  {
+    raw_text:
+      "PURCHASE ORDER #PO-2024-001\nVendor: Green Materials Co.\n\nLine Items:\n- PVC Pipes Scrap: 750 kg\n- LDPE Film Bales: 450 kg\n- PET Flakes Hot Washed: 600 kg",
+    extracted_data: {
+      items: [
+        { description: "PVC Pipes Scrap", quantity: 750, unit: "kg" },
+        { description: "LDPE Film Bales", quantity: 450, unit: "kg" },
+        { description: "PET Flakes Hot Washed", quantity: 600, unit: "kg" },
+      ],
+      confidence: 0.92,
+    },
+    confidence: 0.92,
+  },
+  {
+    raw_text:
+      "RECEIPT OF MATERIALS\nDate: March 10, 2024\nReceived from: Industrial Plastics Ltd.\n\nMaterials Received:\n- HDPE Regrind Natural - 1200 kg\n- PP Copolymer - 800 kg\n- PS Trays - 300 kg",
+    extracted_data: {
+      items: [
+        { description: "HDPE Regrind Natural", quantity: 1200, unit: "kg" },
+        { description: "PP Copolymer", quantity: 800, unit: "kg" },
+        { description: "PS Trays", quantity: 300, unit: "kg" },
+      ],
+      confidence: 0.88,
+    },
+    confidence: 0.88,
+  },
+];
 
 export const ocrService = {
-  /**
-   * Submit document for OCR processing
-   * Backend calls OCR service directly (internal network)
-   */
   async submitForOcr(documentId, storagePath) {
-    try {
-      const response = await axios.post(
-        `${OCR_URL}/extract`,
-        {
-          document_id: documentId,
-          file_path: storagePath,
-          // OCR will call this webhook when done
-          webhook_url: `${env.BACKEND_WEBHOOK_URL}/ocr/complete`,
-        },
-        {
-          timeout: 5000, // 5s to accept job
-        }
-      );
-
-      return {
-        jobId: response.data.job_id,
-        status: "SUBMITTED",
-        estimatedTime: response.data.estimated_time || 30,
-      };
-    } catch (error) {
-      console.error("OCR submission failed:", error.message);
-      throw new Error(`Failed to submit OCR job: ${error.message}`);
-    }
-  },
-
-  /**
-   * Check job status (for polling fallback)
-   */
-  async getJobStatus(jobId) {
-    try {
-      const response = await axios.get(`${OCR_URL}/status/${jobId}`, {
-        timeout: 5000,
-      });
-      return response.data;
-    } catch (error) {
-      throw new Error(`Failed to get OCR status: ${error.message}`);
-    }
-  },
-
-  /**
-   * MOCK for testing (remove when OCR ready)
-   */
-  async mockSubmit(documentId, storagePath) {
-    console.log(`[MOCK OCR] Submitting ${documentId}`);
-
-    // Simulate async processing
     setTimeout(async () => {
       try {
-        const axios = (await import("axios")).default;
+        const mockData =
+          MOCK_OCR_RESULTS[Math.floor(Math.random() * MOCK_OCR_RESULTS.length)];
 
-        await axios.post(`${env.BACKEND_WEBHOOK_URL}/ocr/complete`, {
-          document_id: documentId,
-          status: "COMPLETED",
-          raw_text:
-            "Reliance Industries Ltd\n" +
-            "GST: 27AAACR5055K1Z5\n" +
-            "Invoice No: RI/2025/00142\n" +
-            "Date: 15-03-2025\n\n" +
-            "Item: POLYPET 3020 Bottle Grade\n" +
-            "Quantity: 10,000 KG\n" +
-            "Rate: ₹85.50 per KG\n" +
-            "Amount: ₹855,000",
-          extracted_data: {
-            supplier: "Reliance Industries Ltd",
-            supplier_gst: "27AAACR5055K1Z5",
-            invoice_number: "RI/2025/00142",
-            date: "2025-03-15",
-            items: [
-              {
-                description: "POLYPET 3020 Bottle Grade",
-                quantity: "10,000",
-                unit: "KG",
-                rate: "85.50",
-                amount: "855000",
-              },
-            ],
-            total_amount: "855000",
-            currency: "INR",
-          },
-          confidence: 92.5,
-          processing_time: 4.2,
-        });
-      } catch (e) {
-        console.error("[MOCK OCR] Webhook failed:", e.message);
+        await supabaseAdmin
+          .from("documents")
+          .update({
+            raw_text: mockData.raw_text,
+            extracted_data: mockData.extracted_data,
+            ocr_confidence: mockData.confidence,
+            status: "COMPLETED",
+            requires_human_review: true,
+            reasoning:
+              "Items extracted via OCR. Please map materials manually.",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", documentId);
+
+        const items = mockData.extracted_data?.items || [];
+
+        if (items.length > 0) {
+          const classifications = items.map((item) => ({
+            document_id: documentId,
+            material_code: null,
+            quantity_kg: item.quantity || 0,
+            confidence_score: 0,
+            reasoning: `Extracted from OCR: "${item.description}"`,
+            matched_synonym: item.description,
+            requires_human_review: true,
+            verified_by_user: false,
+          }));
+
+          await supabaseAdmin
+            .from("document_classifications")
+            .insert(classifications);
+        }
+
+        console.log(`[OCR] Document ${documentId} processed successfully`);
+      } catch (error) {
+        console.error(`[OCR] Failed for document ${documentId}:`, error);
+        await supabaseAdmin
+          .from("documents")
+          .update({
+            status: "OCR_FAILED",
+            error_message: error.message,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", documentId);
       }
-    }, 5000); // 5 second delay
+    }, 2000);
+  },
 
-    return {
-      jobId: `mock-ocr-${documentId}`,
-      status: "SUBMITTED",
-      estimatedTime: 5,
-    };
+  async mockSubmit(documentId) {
+    return this.submitForOcr(documentId, null);
   },
 };

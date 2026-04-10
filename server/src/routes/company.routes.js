@@ -1,17 +1,14 @@
-import express from "express";
-import {
-  createCompany,
-  updateCompany,
-  getMyCompany,
-  getCompanyById,
-} from "../controllers/company.controller.js";
+import { Router } from "express";
+import { companyController } from "../controllers/company.controller.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 
-const router = express.Router();
+const router = Router();
 
-router.post("/", authenticate, createCompany);
-router.patch("/", authenticate, updateCompany);
-router.get("/me", authenticate, getMyCompany);
-router.get("/:id", authenticate, getCompanyById);
+router.use(authenticate);
+
+router.post("/", companyController.createCompany);
+router.patch("/", companyController.updateCompany);
+router.get("/me", companyController.getMyCompany);
+router.get("/:id", companyController.getCompanyById);
 
 export default router;

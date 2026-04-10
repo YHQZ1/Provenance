@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { supabase } from "../lib/supabase"; // adjust path
+import { supabase } from "../lib/supabase";
 
 export default function ProtectedRoute({ children }) {
   const [session, setSession] = useState(null);
@@ -19,12 +19,11 @@ export default function ProtectedRoute({ children }) {
 
     getSession();
 
-    // real-time auth listener (important)
     const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setSession(session);
         setLoading(false);
-      }
+      },
     );
 
     return () => {
@@ -33,7 +32,31 @@ export default function ProtectedRoute({ children }) {
     };
   }, []);
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          height: "100vh",
+          background: "#fff",
+        }}
+      >
+        <div
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: "50%",
+            border: "2px solid var(--border)",
+            borderTopColor: "var(--success)",
+            animation: "spin 0.7s linear infinite",
+          }}
+        />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
 
   if (!session) {
     return <Navigate to="/auth?mode=login" replace />;

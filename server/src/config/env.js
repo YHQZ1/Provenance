@@ -1,40 +1,3 @@
-// import dotenv from "dotenv";
-// import { fileURLToPath } from "url";
-// import { dirname, join } from "path";
-
-// const __filename = fileURLToPath(import.meta.url);
-// const __dirname = dirname(__filename);
-
-// // Load .env from server root
-// dotenv.config({ path: join(__dirname, "../../.env") });
-
-// export const env = {
-//   // Server
-//   PORT: process.env.PORT || 3000,
-//   NODE_ENV: process.env.NODE_ENV || "development",
-  
-//   // Supabase
-//   SUPABASE_URL: process.env.SUPABASE_URL,
-//   SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
-//   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
-  
-//   // CORS
-//   CORS_ORIGIN: process.env.CORS_ORIGIN || "http://localhost:5173",
-  
-//   // Services (internal network)
-//   OCR_SERVICE_URL: process.env.OCR_SERVICE_URL || "http://ocr-service:8000",
-//   RAG_SERVICE_URL: process.env.RAG_SERVICE_URL || "http://rag-service:8001",
-  
-//   // Webhooks (how OCR/RAG call back)
-//   BACKEND_WEBHOOK_URL: process.env.BACKEND_WEBHOOK_URL || "http://backend:3000/api",
-  
-//   // Uploads
-//   UPLOAD_TEMP_DIR: process.env.UPLOAD_TEMP_DIR || "./uploads",
-  
-//   // Feature flags
-//   USE_MOCK_SERVICES: process.env.USE_MOCK_SERVICES || "true", // Set "false" when services ready
-// };
-
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -42,24 +5,28 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const NODE_ENV = process.env.NODE_ENV;
-
-const envFile = `.env.${NODE_ENV}`;
-const envPath = path.resolve(__dirname, "../../", envFile);
+const NODE_ENV = process.env.NODE_ENV || "development";
+const envPath = path.resolve(__dirname, "../../", `.env.${NODE_ENV}`);
 
 dotenv.config({ path: envPath });
 
-const requiredEnvVars = ["SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_URL", "SUPABASE_ANON_KEY"];
+const requiredEnvVars = [
+  "SUPABASE_URL",
+  "SUPABASE_ANON_KEY",
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "CORS_ORIGIN",
+];
 
 for (const envVar of requiredEnvVars) {
   if (!process.env[envVar]) {
-    throw new Error(`${envVar} is required in ${envFile}`);
+    console.error(`Missing required environment variable: ${envVar}`);
+    process.exit(1);
   }
 }
 
 export const env = {
-  PORT: process.env.PORT || 3000,
-  NODE_ENV: process.env.NODE_ENV,
+  PORT: parseInt(process.env.PORT, 10) || 3000,
+  NODE_ENV,
 
   SUPABASE_URL: process.env.SUPABASE_URL,
   SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
@@ -76,12 +43,12 @@ export const env = {
   MICROSOFT_REDIRECT_URI: process.env.MICROSOFT_REDIRECT_URI,
 
   CORS_ORIGIN: process.env.CORS_ORIGIN,
-  OCR_SERVICE_URL: process.env.OCR_SERVICE_URL || "http://ocr-service:8000",
-  RAG_SERVICE_URL: process.env.RAG_SERVICE_URL || "http://rag-service:8001",
-  
-  BACKEND_WEBHOOK_URL: process.env.BACKEND_WEBHOOK_URL || "http://backend:3000/api",
-  
+  FRONTEND_URL: process.env.FRONTEND_URL,
+
+  OCR_SERVICE_URL: process.env.OCR_SERVICE_URL,
+  RAG_SERVICE_URL: process.env.RAG_SERVICE_URL,
+  BACKEND_WEBHOOK_URL: process.env.BACKEND_WEBHOOK_URL,
+
   UPLOAD_TEMP_DIR: process.env.UPLOAD_TEMP_DIR || "./uploads",
-  
-  USE_MOCK_SERVICES: process.env.USE_MOCK_SERVICES || "true",
+  USE_MOCK_SERVICES: process.env.USE_MOCK_SERVICES === "true",
 };

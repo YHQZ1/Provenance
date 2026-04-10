@@ -1,5 +1,6 @@
 /* eslint-disable react-hooks/refs */
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 
 const MODULES = [
   {
@@ -54,7 +55,7 @@ const STEPS = [
   },
 ];
 
-function useInView(threshold = 0.15) {
+const useInView = (threshold = 0.15) => {
   const ref = useRef(null);
   const [inView, setInView] = useState(false);
   useEffect(() => {
@@ -73,9 +74,103 @@ function useInView(threshold = 0.15) {
     return () => obs.disconnect();
   }, [threshold]);
   return { ref, inView };
-}
+};
 
-export default function Provenance() {
+const styles = {
+  contentWrapper: {
+    maxWidth: 1280,
+    margin: "0 auto",
+    padding: "0 32px",
+    width: "100%",
+  },
+  navLink: {
+    fontSize: 15,
+    fontWeight: 500,
+    color: "var(--text-muted)",
+    textDecoration: "none",
+    transition: "color 0.2s",
+  },
+  btnDark: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "var(--dark)",
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: 500,
+    padding: "12px 24px",
+    borderRadius: 8,
+    border: "none",
+    cursor: "pointer",
+    textDecoration: "none",
+    transition: "background 0.2s, transform 0.15s",
+  },
+  btnOutline: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "transparent",
+    color: "var(--text-primary)",
+    fontSize: 13,
+    fontWeight: 500,
+    padding: "12px 24px",
+    borderRadius: 8,
+    border: "1px solid var(--border)",
+    cursor: "pointer",
+    textDecoration: "none",
+    transition: "border-color 0.2s, background 0.2s",
+  },
+  btnGreen: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "var(--accent)",
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: 500,
+    padding: "12px 24px",
+    borderRadius: 8,
+    border: "none",
+    cursor: "pointer",
+    textDecoration: "none",
+    transition: "background 0.2s, transform 0.15s",
+  },
+  tag: {
+    display: "inline-block",
+    fontSize: 11,
+    fontWeight: 500,
+    letterSpacing: "0.1em",
+    textTransform: "uppercase",
+    padding: "4px 10px",
+    borderRadius: 99,
+    border: "1px solid var(--border)",
+    color: "var(--text-muted)",
+  },
+  pill: {
+    fontSize: 11,
+    fontWeight: 500,
+    padding: "6px 12px",
+    borderRadius: 6,
+    background: "var(--surface)",
+    color: "var(--text-secondary)",
+    border: "1px solid var(--border)",
+  },
+  progressBar: {
+    height: 3,
+    borderRadius: 99,
+    background: "var(--border)",
+    overflow: "hidden",
+  },
+  progressFill: (pct, ok = true) => ({
+    height: "100%",
+    borderRadius: 99,
+    background: ok ? "var(--success)" : "var(--dark)",
+    width: `${pct}%`,
+  }),
+};
+
+export default function Landing() {
+  const navigate = useNavigate();
   const [activeModule, setActiveModule] = useState(0);
   const [email, setEmail] = useState("");
   const [mounted, setMounted] = useState(false);
@@ -101,6 +196,9 @@ export default function Provenance() {
   const steps = useInView(0.1);
   const cta = useInView(0.1);
 
+  const fadeUpClass = (inView, delay = "") =>
+    `fade-up ${inView ? "visible" : ""} ${delay}`.trim();
+
   return (
     <div
       style={{
@@ -112,111 +210,35 @@ export default function Provenance() {
       }}
     >
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Mono:wght@400;500&display=swap');
-
-        html { scroll-behavior: smooth; }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        ::selection { background: #059669; color: #fff; }
-
-        /* Animation Classes */
         .fade-up { opacity: 0; transform: translateY(20px); transition: opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1), transform 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
         .fade-up.visible { opacity: 1; transform: none; }
         .fade-up.d1 { transition-delay: 0.05s; }
         .fade-up.d2 { transition-delay: 0.12s; }
         .fade-up.d3 { transition-delay: 0.19s; }
         .fade-up.d4 { transition-delay: 0.26s; }
-
         .hero-enter { opacity: 0; transform: translateY(28px); transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1), transform 0.7s cubic-bezier(0.22, 1, 0.36, 1); }
         .hero-enter.mounted { opacity: 1; transform: none; }
         .hero-enter.d1 { transition-delay: 0.1s; }
         .hero-enter.d2 { transition-delay: 0.2s; }
         .hero-enter.d3 { transition-delay: 0.3s; }
         .hero-enter.d4 { transition-delay: 0.45s; }
-
         .module-preview { opacity: 1; transform: none; transition: opacity 0.16s ease, transform 0.16s ease; }
         .module-preview.out { opacity: 0; transform: translateY(6px); }
-
-        .mono { font-family: 'DM Mono', monospace; }
-
-        /* Components */
-        .content-wrapper {
-          max-width: 100%;
-          margin: 0 auto;
-          padding: 0 32px;
-        }
-
-        .nav-link {
-          font-size: 16px;
-          font-weight: 500;
-          color: #737373;
-          text-decoration: none;
-          transition: color 0.2s;
-        }
-        .nav-link:hover { color: #0a0a0a; }
-
-        .btn-dark {
-          display: inline-flex; align-items: center; justify-content: center;
-          background: #0a0a0a; color: #fff; font-size: 13px; font-weight: 500;
-          padding: 12px 24px; border-radius: 6px; border: none; cursor: pointer;
-          text-decoration: none; transition: background 0.2s, transform 0.15s;
-        }
-        .btn-dark:hover { background: #1a1a1a; }
-        .btn-dark:active { transform: scale(0.98); }
-
-        .btn-outline {
-          display: inline-flex; align-items: center; justify-content: center;
-          background: transparent; color: #0a0a0a; font-size: 13px; font-weight: 500;
-          padding: 12px 24px; border-radius: 6px; border: 1px solid #e5e5e5;
-          cursor: pointer; text-decoration: none; transition: border-color 0.2s, background 0.2s, transform 0.15s;
-        }
-        .btn-outline:hover { border-color: #0a0a0a; background: #fafafa; }
-        .btn-outline:active { transform: scale(0.98); }
-
-        .btn-green {
-          display: inline-flex; align-items: center; justify-content: center;
-          background: #059669; color: #fff; font-size: 13px; font-weight: 500;
-          padding: 12px 24px; border-radius: 6px; border: none; cursor: pointer;
-          text-decoration: none; transition: background 0.2s, transform 0.15s;
-        }
-        .btn-green:hover { background: #047857; }
-        .btn-green:active { transform: scale(0.98); }
-
-        .mod-tab {
-          padding: 10px 20px; border-radius: 6px; font-size: 13px; font-weight: 500;
-          border: 1px solid #e5e5e5; background: #fff; color: #737373;
-          cursor: pointer; transition: all 0.18s ease;
-        }
-        .mod-tab:hover { color: #0a0a0a; border-color: #d4d4d4; }
-        .mod-tab.active { background: #0a0a0a; color: #fff; border-color: #0a0a0a; }
-
-        .stat-card { padding: 20px 24px; border: 1px solid #e5e5e5; border-radius: 8px; background: #fafafa; }
-
-        .progress-bar { height: 3px; border-radius: 99px; background: #e5e5e5; overflow: hidden; }
-        .progress-fill { height: 100%; border-radius: 99px; background: #059669; }
-        .progress-fill.dark { background: #0a0a0a; }
-
-        .pill { font-size: 11px; font-weight: 500; padding: 6px 12px; border-radius: 5px; background: #f5f5f5; color: #525252; border: 1px solid #e5e5e5; }
-
-        .step-card { padding: 32px; border-radius: 12px; border: 1px solid #262626; background: #111; transition: background 0.2s; }
+        .mod-tab { padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 500; border: 1px solid var(--border); background: #fff; color: var(--text-muted); cursor: pointer; transition: all 0.18s ease; }
+        .mod-tab:hover { color: var(--text-primary); border-color: var(--border-hover); }
+        .mod-tab.active { background: var(--dark); color: #fff; border-color: var(--dark); }
+        .stat-card { padding: 20px 24px; border: 1px solid var(--border); border-radius: 10px; background: #fafafa; }
+        .sidebar-item { padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; color: var(--text-muted); cursor: pointer; transition: all 0.15s; border: 1px solid transparent; }
+        .sidebar-item:hover { color: var(--text-primary); background: #f5f5f5; }
+        .sidebar-item.active { background: #fff; border-color: var(--border); color: var(--text-primary); box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+        .step-card { padding: 32px; border-radius: 14px; border: 1px solid #262626; background: #111; transition: background 0.2s; }
         .step-card:hover { background: #161616; }
-
-        .tag { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; padding: 4px 10px; border-radius: 99px; border: 1px solid #e5e5e5; color: #737373; }
-
-        input[type="email"] {
-          font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 12px 16px;
-          border: 1px solid #e5e5e5; border-radius: 6px; outline: none; background: #fafafa;
-          color: #0a0a0a; transition: border-color 0.2s, background 0.2s; width: 100%;
-        }
-        input[type="email"]::placeholder { color: #a3a3a3; }
-        input[type="email"]:focus { border-color: #059669; background: #fff; }
-
-        .sidebar-item { padding: 10px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; color: #737373; cursor: pointer; transition: all 0.15s; border: 1px solid transparent; }
-        .sidebar-item:hover { color: #0a0a0a; background: #f5f5f5; }
-        .sidebar-item.active { background: #fff; border-color: #e5e5e5; color: #0a0a0a; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-
-        .deadline-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border: 1px solid #e5e5e5; border-radius: 8px; cursor: pointer; transition: border-color 0.15s; }
-        .deadline-row:hover { border-color: #d4d4d4; }
-
+        .deadline-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; transition: border-color 0.15s; }
+        .deadline-row:hover { border-color: var(--border-hover); }
+        .nav-link:hover { color: var(--text-primary) !important; }
+        .btn-dark:hover { background: #1a1a1a !important; }
+        .btn-outline:hover { border-color: var(--dark) !important; background: #fafafa !important; }
+        .btn-green:hover { background: var(--accent-hover) !important; }
         @media (max-width: 1024px) {
           .hero-grid { grid-template-columns: 1fr !important; gap: 48px !important; }
           .dash-layout { flex-direction: column !important; }
@@ -226,7 +248,6 @@ export default function Provenance() {
         }
       `}</style>
 
-      {/* HEADER */}
       <header
         style={{
           position: "fixed",
@@ -236,29 +257,29 @@ export default function Provenance() {
           zIndex: 50,
           background: "rgba(255,255,255,0.9)",
           backdropFilter: "blur(12px)",
-          borderBottom: "1px solid #e5e5e5",
+          borderBottom: "1px solid var(--border)",
           opacity: mounted ? 1 : 0,
           transition: "opacity 0.5s ease",
         }}
       >
         <div
-          className="content-wrapper"
           style={{
-            height: 70,
+            ...styles.contentWrapper,
+            height: 72,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <img
               src="/provenance.png"
-              alt="Provenance Logo"
-              style={{ height: 32 }}
+              alt="Provenance"
+              style={{ height: 28 }}
             />
             <span
               style={{
-                fontSize: 24,
+                fontSize: 20,
                 fontWeight: 600,
                 letterSpacing: "-0.02em",
               }}
@@ -266,64 +287,60 @@ export default function Provenance() {
               Provenance
             </span>
           </div>
-
           <nav style={{ display: "flex", gap: 32 }}>
             {["Platform", "Solutions", "Architecture"].map((l) => (
-              <a key={l} href={`#${l.toLowerCase()}`} className="nav-link">
+              <a key={l} href={`#${l.toLowerCase()}`} style={styles.navLink}>
                 {l}
               </a>
             ))}
           </nav>
-
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <a href="/auth?mode=login" className="nav-link">
+            <a href="/auth?mode=login" style={styles.navLink}>
               Sign in
             </a>
-            <a href="/auth?mode=signup" className="btn-dark">
+            <a href="/auth?mode=signup" style={styles.btnDark}>
               Get Access
             </a>
           </div>
         </div>
       </header>
 
-      {/* HERO */}
       <section style={{ width: "100%", padding: "160px 0 80px" }}>
         <div
           ref={hero.ref}
-          className="content-wrapper hero-grid"
           style={{
+            ...styles.contentWrapper,
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
             gap: 64,
             alignItems: "center",
           }}
+          className="hero-grid"
         >
           <div>
             <div className={`hero-enter ${mounted ? "mounted" : ""}`}>
-              <span className="tag">Deterministic Compliance Engine</span>
+              <span style={styles.tag}>Deterministic Compliance Engine</span>
             </div>
             <h1
               className={`hero-enter ${mounted ? "mounted" : ""} d1`}
               style={{
-                fontSize: 64,
+                fontSize: 56,
                 fontWeight: 600,
                 letterSpacing: "-0.03em",
-                lineHeight: 1.05,
-                color: "#0a0a0a",
-                margin: "24px 0 24px",
+                lineHeight: 1.1,
+                margin: "24px 0",
               }}
             >
               Correctness over
               <br />
-              <span style={{ color: "#059669" }}>convenience.</span>
+              <span style={{ color: "var(--accent)" }}>convenience.</span>
             </h1>
             <p
               className={`hero-enter ${mounted ? "mounted" : ""} d2`}
               style={{
-                fontSize: 18,
-                color: "#525252",
+                fontSize: 17,
+                color: "var(--text-secondary)",
                 lineHeight: 1.6,
-                fontWeight: 400,
                 maxWidth: 480,
                 marginBottom: 40,
               }}
@@ -336,15 +353,14 @@ export default function Provenance() {
               className={`hero-enter ${mounted ? "mounted" : ""} d3`}
               style={{ display: "flex", gap: 12 }}
             >
-              <a href="/auth?mode=signup" className="btn-dark">
+              <a href="/auth?mode=signup" style={styles.btnDark}>
                 Deploy System
               </a>
-              <a href="#architecture" className="btn-outline">
+              <a href="#architecture" style={styles.btnOutline}>
                 Read the Docs
               </a>
             </div>
           </div>
-
           <div
             className={`hero-enter ${mounted ? "mounted" : ""} d4`}
             style={{ position: "relative" }}
@@ -358,7 +374,7 @@ export default function Provenance() {
                 bottom: -12,
                 background: "#f5f5f5",
                 borderRadius: 16,
-                border: "1px solid #e5e5e5",
+                border: "1px solid var(--border)",
                 zIndex: 0,
               }}
             />
@@ -368,7 +384,7 @@ export default function Provenance() {
                 zIndex: 1,
                 background: "#fff",
                 borderRadius: 16,
-                border: "1px solid #e5e5e5",
+                border: "1px solid var(--border)",
                 boxShadow: "0 8px 32px rgba(0,0,0,0.06)",
                 padding: 32,
               }}
@@ -379,7 +395,7 @@ export default function Provenance() {
                   alignItems: "center",
                   justifyContent: "space-between",
                   paddingBottom: 20,
-                  borderBottom: "1px solid #f5f5f5",
+                  borderBottom: "1px solid var(--border-light)",
                   marginBottom: 24,
                 }}
               >
@@ -389,7 +405,7 @@ export default function Provenance() {
                       width: 8,
                       height: 8,
                       borderRadius: "50%",
-                      background: "#059669",
+                      background: "var(--accent)",
                     }}
                   />
                   <span
@@ -397,7 +413,7 @@ export default function Provenance() {
                     style={{
                       fontSize: 11,
                       fontWeight: 500,
-                      color: "#737373",
+                      color: "var(--text-muted)",
                       letterSpacing: "0.08em",
                       textTransform: "uppercase",
                     }}
@@ -413,7 +429,7 @@ export default function Provenance() {
                     background: "#f5f5f5",
                     borderRadius: 4,
                     padding: "4px 10px",
-                    color: "#0a0a0a",
+                    color: "var(--text-primary)",
                     letterSpacing: "0.06em",
                     textTransform: "uppercase",
                   }}
@@ -421,14 +437,13 @@ export default function Provenance() {
                   SYS_OK
                 </span>
               </div>
-
               <div
                 style={{
                   display: "flex",
                   alignItems: "center",
                   gap: 28,
                   paddingBottom: 24,
-                  borderBottom: "1px solid #f5f5f5",
+                  borderBottom: "1px solid var(--border-light)",
                   marginBottom: 24,
                 }}
               >
@@ -461,7 +476,7 @@ export default function Provenance() {
                       cy="40"
                       r="32"
                       fill="none"
-                      stroke="#059669"
+                      stroke="var(--accent)"
                       strokeWidth="6"
                       strokeLinecap="round"
                       strokeDasharray={`${0.8 * 201} 201`}
@@ -477,15 +492,7 @@ export default function Provenance() {
                       justifyContent: "center",
                     }}
                   >
-                    <span
-                      style={{
-                        fontSize: 24,
-                        fontWeight: 600,
-                        color: "#0a0a0a",
-                      }}
-                    >
-                      80
-                    </span>
+                    <span style={{ fontSize: 24, fontWeight: 600 }}>80</span>
                   </div>
                 </div>
                 <div>
@@ -493,7 +500,7 @@ export default function Provenance() {
                     className="mono"
                     style={{
                       fontSize: 11,
-                      color: "#737373",
+                      color: "var(--text-muted)",
                       letterSpacing: "0.08em",
                       textTransform: "uppercase",
                       marginBottom: 8,
@@ -502,12 +509,7 @@ export default function Provenance() {
                     Global ESG Index
                   </p>
                   <p
-                    style={{
-                      fontSize: 16,
-                      fontWeight: 500,
-                      color: "#0a0a0a",
-                      marginBottom: 12,
-                    }}
+                    style={{ fontSize: 16, fontWeight: 500, marginBottom: 12 }}
                   >
                     Top Quartile Performance
                   </p>
@@ -516,8 +518,8 @@ export default function Provenance() {
                     style={{
                       fontSize: 11,
                       fontWeight: 500,
-                      background: "#ecfdf5",
-                      color: "#059669",
+                      background: "var(--success-bg)",
+                      color: "var(--success)",
                       borderRadius: 4,
                       padding: "4px 10px",
                       textTransform: "uppercase",
@@ -528,7 +530,6 @@ export default function Provenance() {
                   </span>
                 </div>
               </div>
-
               <div
                 style={{
                   display: "grid",
@@ -545,8 +546,8 @@ export default function Provenance() {
                   <div
                     key={item.label}
                     style={{
-                      border: "1px solid #f0f0f0",
-                      borderRadius: 8,
+                      border: "1px solid var(--border-light)",
+                      borderRadius: 10,
                       padding: 16,
                       background: "#fafafa",
                     }}
@@ -564,7 +565,7 @@ export default function Provenance() {
                         style={{
                           fontSize: 10,
                           fontWeight: 500,
-                          color: "#737373",
+                          color: "var(--text-muted)",
                           textTransform: "uppercase",
                           letterSpacing: "0.08em",
                         }}
@@ -576,17 +577,16 @@ export default function Provenance() {
                         style={{
                           fontSize: 11,
                           fontWeight: 600,
-                          color: item.ok ? "#059669" : "#0a0a0a",
+                          color: item.ok
+                            ? "var(--success)"
+                            : "var(--text-primary)",
                         }}
                       >
                         {item.pct}%
                       </span>
                     </div>
-                    <div className="progress-bar">
-                      <div
-                        className={`progress-fill${item.ok ? "" : " dark"}`}
-                        style={{ width: `${item.pct}%` }}
-                      />
+                    <div style={styles.progressBar}>
+                      <div style={styles.progressFill(item.pct, item.ok)} />
                     </div>
                   </div>
                 ))}
@@ -596,11 +596,10 @@ export default function Provenance() {
         </div>
       </section>
 
-      {/* PLATFORM / DASHBOARD */}
       <section id="platform" style={{ width: "100%", padding: "40px 0 100px" }}>
-        <div className="content-wrapper" ref={dash.ref}>
+        <div style={styles.contentWrapper} ref={dash.ref}>
           <div
-            className={`fade-up ${dash.inView ? "visible" : ""}`}
+            className={fadeUpClass(dash.inView)}
             style={{ marginBottom: 48 }}
           >
             <p
@@ -608,7 +607,7 @@ export default function Provenance() {
               style={{
                 fontSize: 12,
                 fontWeight: 500,
-                color: "#059669",
+                color: "var(--accent)",
                 letterSpacing: "0.1em",
                 textTransform: "uppercase",
                 marginBottom: 16,
@@ -618,22 +617,20 @@ export default function Provenance() {
             </p>
             <h2
               style={{
-                fontSize: 48,
+                fontSize: 44,
                 fontWeight: 600,
                 letterSpacing: "-0.025em",
                 lineHeight: 1.1,
-                color: "#0a0a0a",
                 maxWidth: 640,
               }}
             >
               Your entire compliance posture in one deterministic view.
             </h2>
           </div>
-
           <div
-            className={`fade-up d1 ${dash.inView ? "visible" : ""}`}
+            className={fadeUpClass(dash.inView, "d1")}
             style={{
-              border: "1px solid #e5e5e5",
+              border: "1px solid var(--border)",
               borderRadius: 14,
               overflow: "hidden",
               boxShadow: "0 4px 24px rgba(0,0,0,0.05)",
@@ -641,7 +638,7 @@ export default function Provenance() {
           >
             <div
               style={{
-                borderBottom: "1px solid #e5e5e5",
+                borderBottom: "1px solid var(--border)",
                 padding: "14px 24px",
                 display: "flex",
                 alignItems: "center",
@@ -650,39 +647,26 @@ export default function Provenance() {
               }}
             >
               <div style={{ display: "flex", gap: 8 }}>
-                <div
-                  style={{
-                    width: 12,
-                    height: 12,
-                    borderRadius: "50%",
-                    background: "#e5e5e5",
-                  }}
-                />
-                <div
-                  style={{
-                    width: 12,
-                    height: 12,
-                    borderRadius: "50%",
-                    background: "#e5e5e5",
-                  }}
-                />
-                <div
-                  style={{
-                    width: 12,
-                    height: 12,
-                    borderRadius: "50%",
-                    background: "#e5e5e5",
-                  }}
-                />
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    style={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: "50%",
+                      background: "var(--border)",
+                    }}
+                  />
+                ))}
               </div>
               <span
                 className="mono"
                 style={{
                   fontSize: 11,
-                  color: "#a3a3a3",
+                  color: "var(--text-light)",
                   letterSpacing: "0.06em",
                   background: "#fff",
-                  border: "1px solid #e5e5e5",
+                  border: "1px solid var(--border)",
                   borderRadius: 6,
                   padding: "4px 12px",
                 }}
@@ -691,7 +675,6 @@ export default function Provenance() {
               </span>
               <div style={{ width: 48 }} />
             </div>
-
             <div
               className="dash-layout"
               style={{ display: "flex", minHeight: 520 }}
@@ -700,7 +683,7 @@ export default function Provenance() {
                 style={{
                   width: 220,
                   flexShrink: 0,
-                  borderRight: "1px solid #f0f0f0",
+                  borderRight: "1px solid var(--border-light)",
                   padding: "20px 16px",
                   background: "#fafafa",
                   display: "flex",
@@ -724,7 +707,6 @@ export default function Provenance() {
                   </div>
                 ))}
               </div>
-
               <div
                 style={{ flex: 1, padding: "32px 40px", background: "#fff" }}
               >
@@ -737,21 +719,14 @@ export default function Provenance() {
                   }}
                 >
                   <div>
-                    <h2
-                      style={{
-                        fontSize: 18,
-                        fontWeight: 600,
-                        color: "#0a0a0a",
-                        letterSpacing: "-0.01em",
-                      }}
-                    >
+                    <h2 style={{ fontSize: 18, fontWeight: 600 }}>
                       FY 2024–25 Telemetry
                     </h2>
                     <p
                       className="mono"
                       style={{
                         fontSize: 11,
-                        color: "#a3a3a3",
+                        color: "var(--text-light)",
                         marginTop: 8,
                         letterSpacing: "0.06em",
                         textTransform: "uppercase",
@@ -760,11 +735,8 @@ export default function Provenance() {
                       Last sync: 12.04.2025 · 14:32 IST
                     </p>
                   </div>
-                  <button className="btn-dark" style={{ fontSize: 11 }}>
-                    Generate Filing
-                  </button>
+                  <button style={styles.btnDark}>Generate Filing</button>
                 </div>
-
                 <div
                   style={{
                     display: "grid",
@@ -796,7 +768,7 @@ export default function Provenance() {
                         style={{
                           fontSize: 11,
                           fontWeight: 500,
-                          color: "#737373",
+                          color: "var(--text-muted)",
                           letterSpacing: "0.08em",
                           textTransform: "uppercase",
                           marginBottom: 12,
@@ -809,7 +781,6 @@ export default function Provenance() {
                           fontSize: 26,
                           fontWeight: 600,
                           letterSpacing: "-0.02em",
-                          color: "#0a0a0a",
                         }}
                       >
                         {c.value}
@@ -818,7 +789,7 @@ export default function Provenance() {
                         className="mono"
                         style={{
                           fontSize: 11,
-                          color: "#059669",
+                          color: "var(--success)",
                           marginTop: 8,
                           letterSpacing: "0.06em",
                           textTransform: "uppercase",
@@ -829,7 +800,6 @@ export default function Provenance() {
                     </div>
                   ))}
                 </div>
-
                 <div
                   style={{
                     display: "grid",
@@ -843,11 +813,11 @@ export default function Provenance() {
                       style={{
                         fontSize: 11,
                         fontWeight: 500,
-                        color: "#0a0a0a",
+                        color: "var(--text-primary)",
                         letterSpacing: "0.08em",
                         textTransform: "uppercase",
                         paddingBottom: 12,
-                        borderBottom: "1px solid #f0f0f0",
+                        borderBottom: "1px solid var(--border-light)",
                         marginBottom: 16,
                       }}
                     >
@@ -874,20 +844,14 @@ export default function Provenance() {
                       ].map((d) => (
                         <div key={d.name} className="deadline-row">
                           <div>
-                            <p
-                              style={{
-                                fontSize: 14,
-                                fontWeight: 500,
-                                color: "#0a0a0a",
-                              }}
-                            >
+                            <p style={{ fontSize: 14, fontWeight: 500 }}>
                               {d.name}
                             </p>
                             <p
                               className="mono"
                               style={{
                                 fontSize: 11,
-                                color: "#737373",
+                                color: "var(--text-muted)",
                                 marginTop: 4,
                                 letterSpacing: "0.04em",
                               }}
@@ -906,10 +870,12 @@ export default function Provenance() {
                               letterSpacing: "0.06em",
                               background:
                                 d.status === "Action Req"
-                                  ? "#0a0a0a"
+                                  ? "var(--dark)"
                                   : "#f5f5f5",
                               color:
-                                d.status === "Action Req" ? "#fff" : "#737373",
+                                d.status === "Action Req"
+                                  ? "#fff"
+                                  : "var(--text-muted)",
                             }}
                           >
                             {d.status}
@@ -918,18 +884,17 @@ export default function Provenance() {
                       ))}
                     </div>
                   </div>
-
                   <div>
                     <p
                       className="mono"
                       style={{
                         fontSize: 11,
                         fontWeight: 500,
-                        color: "#0a0a0a",
+                        color: "var(--text-primary)",
                         letterSpacing: "0.08em",
                         textTransform: "uppercase",
                         paddingBottom: 12,
-                        borderBottom: "1px solid #f0f0f0",
+                        borderBottom: "1px solid var(--border-light)",
                         marginBottom: 16,
                       }}
                     >
@@ -937,8 +902,8 @@ export default function Provenance() {
                     </p>
                     <div
                       style={{
-                        border: "1px solid #e5e5e5",
-                        borderRadius: 8,
+                        border: "1px solid var(--border)",
+                        borderRadius: 10,
                         padding: 24,
                         background: "#fff",
                       }}
@@ -955,7 +920,7 @@ export default function Provenance() {
                           style={{
                             fontSize: 11,
                             fontWeight: 500,
-                            color: "#737373",
+                            color: "var(--text-muted)",
                             letterSpacing: "0.06em",
                             textTransform: "uppercase",
                           }}
@@ -967,20 +932,14 @@ export default function Provenance() {
                           style={{
                             fontSize: 11,
                             fontWeight: 600,
-                            color: "#059669",
+                            color: "var(--success)",
                           }}
                         >
                           87%
                         </span>
                       </div>
-                      <div
-                        className="progress-bar"
-                        style={{ marginBottom: 20 }}
-                      >
-                        <div
-                          className="progress-fill"
-                          style={{ width: "87%" }}
-                        />
+                      <div style={{ ...styles.progressBar, marginBottom: 20 }}>
+                        <div style={styles.progressFill(87)} />
                       </div>
                       <div
                         style={{
@@ -995,7 +954,7 @@ export default function Provenance() {
                             key={q}
                             style={{
                               background: "#fafafa",
-                              borderRadius: 6,
+                              borderRadius: 8,
                               padding: "10px 4px",
                             }}
                           >
@@ -1005,7 +964,10 @@ export default function Provenance() {
                                 fontSize: 11,
                                 fontWeight: 600,
                                 marginBottom: 4,
-                                color: i < 3 ? "#059669" : "#a3a3a3",
+                                color:
+                                  i < 3
+                                    ? "var(--success)"
+                                    : "var(--text-light)",
                               }}
                             >
                               {i < 2 ? "100%" : i === 2 ? "94%" : "0%"}
@@ -1014,7 +976,7 @@ export default function Provenance() {
                               className="mono"
                               style={{
                                 fontSize: 10,
-                                color: "#a3a3a3",
+                                color: "var(--text-light)",
                                 textTransform: "uppercase",
                                 letterSpacing: "0.06em",
                               }}
@@ -1033,19 +995,18 @@ export default function Provenance() {
         </div>
       </section>
 
-      {/* SOLUTIONS / MODULES */}
       <section
         id="solutions"
         style={{
           background: "#fafafa",
-          borderTop: "1px solid #e5e5e5",
+          borderTop: "1px solid var(--border)",
           width: "100%",
           padding: "100px 0",
         }}
       >
-        <div className="content-wrapper" ref={mods.ref}>
+        <div style={styles.contentWrapper} ref={mods.ref}>
           <div
-            className={`fade-up ${mods.inView ? "visible" : ""}`}
+            className={fadeUpClass(mods.inView)}
             style={{ marginBottom: 40 }}
           >
             <p
@@ -1053,7 +1014,7 @@ export default function Provenance() {
               style={{
                 fontSize: 12,
                 fontWeight: 500,
-                color: "#059669",
+                color: "var(--accent)",
                 letterSpacing: "0.1em",
                 textTransform: "uppercase",
                 marginBottom: 16,
@@ -1063,11 +1024,10 @@ export default function Provenance() {
             </p>
             <h2
               style={{
-                fontSize: 48,
+                fontSize: 44,
                 fontWeight: 600,
                 letterSpacing: "-0.025em",
                 lineHeight: 1.1,
-                color: "#0a0a0a",
               }}
             >
               Everything required.
@@ -1075,9 +1035,8 @@ export default function Provenance() {
               Nothing extraneous.
             </h2>
           </div>
-
           <div
-            className={`fade-up d1 ${mods.inView ? "visible" : ""}`}
+            className={fadeUpClass(mods.inView, "d1")}
             style={{
               display: "flex",
               gap: 12,
@@ -1095,9 +1054,8 @@ export default function Provenance() {
               </button>
             ))}
           </div>
-
           <div
-            className={`fade-up d2 mods-grid ${mods.inView ? "visible" : ""}`}
+            className={`${fadeUpClass(mods.inView, "d2")} mods-grid`}
             style={{
               display: "grid",
               gridTemplateColumns: "1fr 1fr",
@@ -1112,9 +1070,9 @@ export default function Provenance() {
                   display: "inline-block",
                   fontSize: 11,
                   fontWeight: 500,
-                  color: "#737373",
+                  color: "var(--text-muted)",
                   background: "#fff",
-                  border: "1px solid #e5e5e5",
+                  border: "1px solid var(--border)",
                   borderRadius: 4,
                   padding: "4px 12px",
                   marginBottom: 24,
@@ -1125,10 +1083,9 @@ export default function Provenance() {
               </span>
               <h3
                 style={{
-                  fontSize: 32,
+                  fontSize: 30,
                   fontWeight: 600,
                   letterSpacing: "-0.02em",
-                  color: "#0a0a0a",
                   lineHeight: 1.2,
                   marginBottom: 20,
                 }}
@@ -1138,9 +1095,8 @@ export default function Provenance() {
               <p
                 style={{
                   fontSize: 16,
-                  color: "#525252",
+                  color: "var(--text-secondary)",
                   lineHeight: 1.7,
-                  fontWeight: 400,
                   marginBottom: 32,
                 }}
               >
@@ -1148,19 +1104,18 @@ export default function Provenance() {
               </p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
                 {MODULES[activeModule].pills.map((p) => (
-                  <span key={p} className="pill">
+                  <span key={p} style={styles.pill}>
                     {p}
                   </span>
                 ))}
               </div>
             </div>
-
             <div
               className={`module-preview ${transitioning ? "out" : ""}`}
               style={{
                 background: "#fff",
                 borderRadius: 14,
-                border: "1px solid #e5e5e5",
+                border: "1px solid var(--border)",
                 padding: 32,
                 boxShadow: "0 4px 16px rgba(0,0,0,0.03)",
               }}
@@ -1172,11 +1127,11 @@ export default function Provenance() {
                     style={{
                       fontSize: 10,
                       fontWeight: 500,
-                      color: "#a3a3a3",
+                      color: "var(--text-light)",
                       letterSpacing: "0.08em",
                       textTransform: "uppercase",
                       paddingBottom: 16,
-                      borderBottom: "1px solid #f0f0f0",
+                      borderBottom: "1px solid var(--border-light)",
                       marginBottom: 24,
                     }}
                   >
@@ -1202,13 +1157,7 @@ export default function Provenance() {
                             marginBottom: 10,
                           }}
                         >
-                          <span
-                            style={{
-                              fontSize: 14,
-                              fontWeight: 500,
-                              color: "#0a0a0a",
-                            }}
-                          >
+                          <span style={{ fontSize: 14, fontWeight: 500 }}>
                             {item.name}
                           </span>
                           <span
@@ -1216,28 +1165,26 @@ export default function Provenance() {
                             style={{
                               fontSize: 13,
                               fontWeight: 600,
-                              color: item.ok ? "#059669" : "#0a0a0a",
+                              color: item.ok
+                                ? "var(--success)"
+                                : "var(--text-primary)",
                             }}
                           >
                             {item.pct}%
                           </span>
                         </div>
-                        <div className="progress-bar">
-                          <div
-                            className={`progress-fill${item.ok ? "" : " dark"}`}
-                            style={{ width: `${item.pct}%` }}
-                          />
+                        <div style={styles.progressBar}>
+                          <div style={styles.progressFill(item.pct, item.ok)} />
                         </div>
                       </div>
                     ))}
                   </div>
-                  <a
-                    href="/auth?mode=login"
-                    className="btn-green"
-                    style={{ width: "100%", marginTop: 32 }}
+                  <button
+                    onClick={() => navigate("/auth?mode=signup")}
+                    style={{ ...styles.btnGreen, width: "100%", marginTop: 32 }}
                   >
                     Initiate CPCB Transfer
-                  </a>
+                  </button>
                 </div>
               )}
               {activeModule === 1 && (
@@ -1247,11 +1194,11 @@ export default function Provenance() {
                     style={{
                       fontSize: 10,
                       fontWeight: 500,
-                      color: "#a3a3a3",
+                      color: "var(--text-light)",
                       letterSpacing: "0.08em",
                       textTransform: "uppercase",
                       paddingBottom: 16,
-                      borderBottom: "1px solid #f0f0f0",
+                      borderBottom: "1px solid var(--border-light)",
                       marginBottom: 8,
                     }}
                   >
@@ -1270,10 +1217,12 @@ export default function Provenance() {
                         justifyContent: "space-between",
                         alignItems: "center",
                         padding: "16px 0",
-                        borderBottom: "1px solid #f5f5f5",
+                        borderBottom: "1px solid var(--border-light)",
                       }}
                     >
-                      <span style={{ fontSize: 14, color: "#525252" }}>
+                      <span
+                        style={{ fontSize: 14, color: "var(--text-secondary)" }}
+                      >
                         {row}
                       </span>
                       <span
@@ -1281,7 +1230,7 @@ export default function Provenance() {
                         style={{
                           fontSize: 10,
                           fontWeight: 600,
-                          color: "#0a0a0a",
+                          color: "var(--text-primary)",
                           background: "#f5f5f5",
                           borderRadius: 4,
                           padding: "4px 10px",
@@ -1302,7 +1251,7 @@ export default function Provenance() {
                     alignItems: "center",
                     justifyContent: "center",
                     height: 240,
-                    border: "1px dashed #e5e5e5",
+                    border: "1px dashed var(--border)",
                     borderRadius: 10,
                     background: "#fafafa",
                   }}
@@ -1311,7 +1260,7 @@ export default function Provenance() {
                     className="mono"
                     style={{
                       fontSize: 11,
-                      color: "#a3a3a3",
+                      color: "var(--text-light)",
                       letterSpacing: "0.08em",
                       textTransform: "uppercase",
                     }}
@@ -1325,14 +1274,13 @@ export default function Provenance() {
         </div>
       </section>
 
-      {/* ARCHITECTURE / IMPLEMENTATION */}
       <section
         id="architecture"
-        style={{ background: "#0a0a0a", width: "100%", padding: "100px 0" }}
+        style={{ background: "var(--dark)", width: "100%", padding: "100px 0" }}
       >
-        <div className="content-wrapper" ref={steps.ref}>
+        <div style={styles.contentWrapper} ref={steps.ref}>
           <div
-            className={`fade-up ${steps.inView ? "visible" : ""}`}
+            className={fadeUpClass(steps.inView)}
             style={{ marginBottom: 64 }}
           >
             <p
@@ -1340,7 +1288,7 @@ export default function Provenance() {
               style={{
                 fontSize: 12,
                 fontWeight: 500,
-                color: "#059669",
+                color: "var(--accent)",
                 letterSpacing: "0.1em",
                 textTransform: "uppercase",
                 marginBottom: 16,
@@ -1350,7 +1298,7 @@ export default function Provenance() {
             </p>
             <h2
               style={{
-                fontSize: 48,
+                fontSize: 44,
                 fontWeight: 600,
                 letterSpacing: "-0.025em",
                 lineHeight: 1.1,
@@ -1361,7 +1309,6 @@ export default function Provenance() {
               Operational before your next filing deadline.
             </h2>
           </div>
-
           <div
             className={`steps-grid ${steps.inView ? "visible" : ""}`}
             style={{
@@ -1373,13 +1320,13 @@ export default function Provenance() {
             {STEPS.map((step, i) => (
               <div
                 key={step.n}
-                className={`step-card fade-up d${i + 1} ${steps.inView ? "visible" : ""}`}
+                className={`step-card ${fadeUpClass(steps.inView, `d${i + 1}`)}`}
               >
                 <span
                   className="mono"
                   style={{
                     fontSize: 12,
-                    color: "#059669",
+                    color: "var(--accent)",
                     fontWeight: 500,
                     display: "block",
                     marginBottom: 28,
@@ -1396,7 +1343,6 @@ export default function Provenance() {
                     fontWeight: 600,
                     color: "#fff",
                     marginBottom: 16,
-                    letterSpacing: "-0.01em",
                   }}
                 >
                   {step.title}
@@ -1404,9 +1350,8 @@ export default function Provenance() {
                 <p
                   style={{
                     fontSize: 15,
-                    color: "#a3a3a3",
+                    color: "var(--text-light)",
                     lineHeight: 1.7,
-                    fontWeight: 400,
                   }}
                 >
                   {step.body}
@@ -1417,27 +1362,22 @@ export default function Provenance() {
         </div>
       </section>
 
-      {/* CTA */}
       <section
         style={{
-          borderTop: "1px solid #e5e5e5",
+          borderTop: "1px solid var(--border)",
           background: "#fff",
           width: "100%",
           padding: "100px 0",
         }}
       >
-        <div className="content-wrapper" ref={cta.ref}>
-          <div
-            className={`fade-up ${cta.inView ? "visible" : ""}`}
-            style={{ maxWidth: 600 }}
-          >
+        <div style={styles.contentWrapper} ref={cta.ref}>
+          <div className={fadeUpClass(cta.inView)} style={{ maxWidth: 600 }}>
             <h2
               style={{
-                fontSize: 48,
+                fontSize: 44,
                 fontWeight: 600,
                 letterSpacing: "-0.025em",
                 lineHeight: 1.1,
-                color: "#0a0a0a",
                 marginBottom: 20,
               }}
             >
@@ -1448,8 +1388,7 @@ export default function Provenance() {
             <p
               style={{
                 fontSize: 16,
-                color: "#525252",
-                fontWeight: 400,
+                color: "var(--text-secondary)",
                 lineHeight: 1.7,
                 marginBottom: 40,
               }}
@@ -1458,7 +1397,7 @@ export default function Provenance() {
               compliance.
             </p>
             <div
-              className={`fade-up d1 ${cta.inView ? "visible" : ""}`}
+              className={fadeUpClass(cta.inView, "d1")}
               style={{ display: "flex", gap: 12, maxWidth: 480 }}
             >
               <input
@@ -1466,29 +1405,28 @@ export default function Provenance() {
                 placeholder="user@enterprise.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                className="auth-input"
               />
-              <a
-                href="/auth?mode=signup"
-                className="btn-dark"
-                style={{ flexShrink: 0 }}
+              <button
+                onClick={() => navigate("/auth?mode=signup")}
+                style={{ ...styles.btnDark, flexShrink: 0 }}
               >
                 Initialize
-              </a>
+              </button>
             </div>
           </div>
         </div>
       </section>
 
-      {/* FOOTER */}
       <footer
         style={{
-          borderTop: "1px solid #e5e5e5",
+          borderTop: "1px solid var(--border)",
           background: "#fafafa",
           width: "100%",
           padding: "80px 0 40px",
         }}
       >
-        <div className="content-wrapper">
+        <div style={styles.contentWrapper}>
           <div
             className="footer-grid"
             style={{
@@ -1509,7 +1447,7 @@ export default function Provenance() {
               >
                 <img
                   src="/provenance.png"
-                  alt="Provenance Logo"
+                  alt="Provenance"
                   style={{ height: 24 }}
                 />
                 <span
@@ -1526,10 +1464,9 @@ export default function Provenance() {
               <p
                 style={{
                   fontSize: 14,
-                  color: "#737373",
+                  color: "var(--text-muted)",
                   maxWidth: 260,
                   lineHeight: 1.6,
-                  fontWeight: 400,
                 }}
               >
                 Enterprise-grade EPR & ESG infrastructure. Deterministic
@@ -1568,12 +1505,12 @@ export default function Provenance() {
                     style={{
                       fontSize: 11,
                       fontWeight: 500,
-                      color: "#0a0a0a",
+                      color: "var(--text-primary)",
                       letterSpacing: "0.1em",
                       textTransform: "uppercase",
                       marginBottom: 20,
                       paddingBottom: 12,
-                      borderBottom: "1px solid #e5e5e5",
+                      borderBottom: "1px solid var(--border)",
                     }}
                   >
                     {col.heading}
@@ -1592,16 +1529,9 @@ export default function Provenance() {
                           href="#platform"
                           style={{
                             fontSize: 14,
-                            color: "#737373",
+                            color: "var(--text-muted)",
                             textDecoration: "none",
-                            transition: "color 0.15s",
                           }}
-                          onMouseOver={(e) =>
-                            (e.currentTarget.style.color = "#0a0a0a")
-                          }
-                          onMouseOut={(e) =>
-                            (e.currentTarget.style.color = "#737373")
-                          }
                         >
                           {link}
                         </a>
@@ -1615,7 +1545,7 @@ export default function Provenance() {
           <div
             style={{
               paddingTop: 24,
-              borderTop: "1px solid #e5e5e5",
+              borderTop: "1px solid var(--border)",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
@@ -1625,7 +1555,7 @@ export default function Provenance() {
               className="mono"
               style={{
                 fontSize: 11,
-                color: "#a3a3a3",
+                color: "var(--text-light)",
                 letterSpacing: "0.06em",
                 textTransform: "uppercase",
               }}

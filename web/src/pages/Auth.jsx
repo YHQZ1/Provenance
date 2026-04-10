@@ -1,9 +1,125 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 
-const styles = `
+const styles = {
+  container: {
+    fontFamily: "'DM Sans', sans-serif",
+    background: "#fff",
+    color: "#0a0a0a",
+    minHeight: "100vh",
+    width: "100vw",
+    maxWidth: "100%",
+    display: "flex",
+    overflow: "hidden",
+  },
+  leftPanel: {
+    width: "42%",
+    flexShrink: 0,
+    background: "#0a0a0a",
+    padding: "48px 40px",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+    position: "relative",
+    overflow: "hidden",
+  },
+  gridOverlay: {
+    position: "absolute",
+    inset: 0,
+    backgroundImage:
+      "linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)",
+    backgroundSize: "32px 32px",
+    pointerEvents: "none",
+  },
+  rightPanel: {
+    flex: 1,
+    padding: "48px 40px",
+    display: "flex",
+    flexDirection: "column",
+    overflowY: "auto",
+  },
+  modeToggle: {
+    display: "flex",
+    border: "1px solid var(--border)",
+    borderRadius: 8,
+    overflow: "hidden",
+    marginBottom: 28,
+  },
+  modeButton: (active) => ({
+    flex: 1,
+    padding: "10px 0",
+    fontFamily: "'DM Mono', monospace",
+    fontSize: 11,
+    fontWeight: 500,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    border: "none",
+    background: active ? "#0a0a0a" : "#fafafa",
+    color: active ? "#fff" : "#a3a3a3",
+    cursor: "pointer",
+    transition: "background 0.15s, color 0.15s",
+  }),
+  socialButton: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    padding: "11px 16px",
+    border: "1px solid var(--border)",
+    borderRadius: 8,
+    background: "#fafafa",
+    cursor: "pointer",
+    fontFamily: "'DM Mono', monospace",
+    fontSize: 11,
+    fontWeight: 500,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    color: "#525252",
+    transition: "border-color 0.15s, background 0.15s, color 0.15s",
+  },
+  submitButton: (loading) => ({
+    width: "100%",
+    padding: "13px 0",
+    background: "#0a0a0a",
+    color: "#fff",
+    border: "none",
+    borderRadius: 8,
+    fontFamily: "'DM Mono', monospace",
+    fontSize: 11,
+    fontWeight: 500,
+    letterSpacing: "0.1em",
+    textTransform: "uppercase",
+    cursor: loading ? "not-allowed" : "pointer",
+    opacity: loading ? 0.6 : 1,
+    marginTop: 8,
+    transition: "background 0.2s",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  }),
+  errorAlert: {
+    background: "var(--error-bg)",
+    border: "1px solid #fecaca",
+    borderRadius: 8,
+    padding: "12px 14px",
+    fontSize: 13,
+    color: "var(--error)",
+    marginBottom: 16,
+  },
+  successAlert: {
+    background: "var(--success-bg)",
+    border: "1px solid #a7f3d0",
+    borderRadius: 8,
+    padding: "12px 14px",
+    fontSize: 13,
+    color: "var(--success)",
+    marginBottom: 16,
+  },
+};
+
+const animations = `
   @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
   @keyframes spin { to { transform: rotate(360deg) } }
   @keyframes pulse { 0%, 100% { opacity: 0.35 } 50% { opacity: 1 } }
@@ -25,6 +141,7 @@ function FullscreenLoader({ message }) {
         animation: "fadeIn 0.25s ease",
       }}
     >
+      <style>{animations}</style>
       <div
         style={{
           width: 44,
@@ -52,6 +169,52 @@ function FullscreenLoader({ message }) {
   );
 }
 
+function FieldWrap({ label, children }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <label
+        style={{
+          display: "block",
+          fontFamily: "'DM Mono', monospace",
+          fontSize: 10,
+          fontWeight: 500,
+          color: "#0a0a0a",
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          marginBottom: 8,
+        }}
+      >
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function AuthInput(props) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <input
+      {...props}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      style={{
+        width: "100%",
+        fontFamily: "'DM Sans', sans-serif",
+        fontSize: 14,
+        fontWeight: 400,
+        padding: "11px 14px",
+        border: `1px solid ${focused ? "#059669" : "#e5e5e5"}`,
+        borderRadius: 8,
+        background: focused ? "#fff" : "#fafafa",
+        color: "#0a0a0a",
+        outline: "none",
+        transition: "border-color 0.2s, background 0.2s",
+      }}
+    />
+  );
+}
+
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
@@ -61,7 +224,8 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [transitioning, setTransitioning] = useState(false);
-  const [transitionMessage, setTransitionMessage] = useState("Authenticating...");
+  const [transitionMessage, setTransitionMessage] =
+    useState("Authenticating...");
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
 
@@ -91,12 +255,22 @@ export default function Auth() {
       const accessToken = hashParams.get("access_token");
 
       if (accessToken) {
-        const { data: { session }, error } = await supabase.auth.setSession({
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: hashParams.get("refresh_token"),
         });
-        if (error || !session) { setInitializing(false); return; }
-        window.history.replaceState({}, document.title, window.location.pathname);
+        if (error || !session) {
+          setInitializing(false);
+          return;
+        }
+        window.history.replaceState(
+          {},
+          document.title,
+          window.location.pathname,
+        );
         try {
           await syncWithBackend(session.access_token);
           await redirectToHome("Signing in...");
@@ -107,7 +281,9 @@ export default function Auth() {
         return;
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (session) {
         try {
           await syncWithBackend(session.access_token);
@@ -133,7 +309,10 @@ export default function Auth() {
       provider: "google",
       options: { redirectTo: window.location.origin + "/auth" },
     });
-    if (error) { setTransitioning(false); setError(error.message); }
+    if (error) {
+      setTransitioning(false);
+      setError(error.message);
+    }
   };
 
   const handleMicrosoftLogin = async () => {
@@ -143,7 +322,10 @@ export default function Auth() {
       provider: "azure",
       options: { redirectTo: window.location.origin + "/auth" },
     });
-    if (error) { setTransitioning(false); setError(error.message); }
+    if (error) {
+      setTransitioning(false);
+      setError(error.message);
+    }
   };
 
   const handleEmailAuth = async (e) => {
@@ -153,23 +335,32 @@ export default function Auth() {
     setMessage(null);
     try {
       if (isLogin) {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
         if (error) throw new Error(error.message);
         if (!data.session) throw new Error("Login failed. Please try again.");
+        localStorage.setItem("sb-access-token", data.session.access_token);
         await syncWithBackend(data.session.access_token);
         await redirectToHome("Signing in...");
       } else {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { data: { company_name: companyName, gst_number: gstNumber } },
+          options: {
+            data: { company_name: companyName, gst_number: gstNumber },
+          },
         });
         if (error) throw new Error(error.message);
         if (!data.session) {
-          setMessage("Check your email to confirm your account before signing in.");
+          setMessage(
+            "Check your email to confirm your account before signing in.",
+          );
           setLoading(false);
           return;
         }
+        localStorage.setItem("sb-access-token", data.session.access_token);
         await syncWithBackend(data.session.access_token);
         await redirectToHome("Creating your workspace...");
       }
@@ -180,7 +371,10 @@ export default function Auth() {
   };
 
   const handleForgotPassword = async () => {
-    if (!email) { setError("Please enter your email address first"); return; }
+    if (!email) {
+      setError("Please enter your email address first");
+      return;
+    }
     setLoading(true);
     setError(null);
     setMessage(null);
@@ -209,56 +403,35 @@ export default function Auth() {
 
   if (initializing || transitioning) {
     return (
-      <>
-        <style>{styles}</style>
-        <FullscreenLoader message={transitioning ? transitionMessage : "Loading..."} />
-      </>
+      <FullscreenLoader
+        message={transitioning ? transitionMessage : "Loading..."}
+      />
     );
   }
 
   return (
-    <div
-      style={{
-        fontFamily: "'DM Sans', sans-serif",
-        background: "#fff",
-        color: "#0a0a0a",
-        height: "100vh",
-        display: "flex",
-        overflow: "hidden",
-        animation: "slideUp 0.35s ease both",
-      }}
-    >
-      <style>{styles}</style>
+    <div style={styles.container}>
+      <style>{animations}</style>
 
-      {/* LEFT PANEL */}
-      <div
-        style={{
-          width: "42%",
-          flexShrink: 0,
-          background: "#0a0a0a",
-          padding: "48px 40px",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-          position: "relative",
-          overflow: "hidden",
-        }}
-      >
-        {/* subtle grid */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            backgroundImage:
-              "linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)",
-            backgroundSize: "32px 32px",
-            pointerEvents: "none",
-          }}
-        />
-
+      <div style={styles.leftPanel}>
+        <div style={styles.gridOverlay} />
         <div style={{ position: "relative", zIndex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 48 }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#059669" }} />
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              marginBottom: 48,
+            }}
+          >
+            <div
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: "#059669",
+              }}
+            />
             <span
               style={{
                 fontFamily: "'DM Mono', monospace",
@@ -285,7 +458,6 @@ export default function Auth() {
             The immutable ledger for your compliance posture.
           </h2>
         </div>
-
         <div
           style={{
             position: "relative",
@@ -312,18 +484,9 @@ export default function Auth() {
         </div>
       </div>
 
-      {/* RIGHT PANEL */}
-      <div
-        style={{
-          flex: 1,
-          padding: "48px 40px",
-          display: "flex",
-          flexDirection: "column",
-          overflowY: "auto",
-        }}
-      >
-        <a
-          href="/"
+      <div style={styles.rightPanel}>
+        <Link
+          to="/"
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -338,14 +501,20 @@ export default function Auth() {
             marginBottom: 40,
             transition: "color 0.15s",
           }}
-          onMouseOver={(e) => (e.currentTarget.style.color = "#0a0a0a")}
-          onMouseOut={(e) => (e.currentTarget.style.color = "#a3a3a3")}
+          className="hover:text-[#0a0a0a]"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
             <path d="M19 12H5M12 19l-7-7 7-7" />
           </svg>
           Back to website
-        </a>
+        </Link>
 
         <div
           style={{
@@ -353,63 +522,73 @@ export default function Auth() {
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
-            maxWidth: 380,
+            width: "100%",
+            maxWidth: 480,
+            margin: "0 auto",
           }}
         >
-          {/* Mode toggle */}
-          <div
-            style={{
-              display: "flex",
-              border: "1px solid #e5e5e5",
-              borderRadius: 6,
-              overflow: "hidden",
-              marginBottom: 28,
-            }}
-          >
+          <div style={styles.modeToggle}>
             {[
               { label: "Sign In", mode: true },
               { label: "Create Workspace", mode: false },
             ].map(({ label, mode }) => (
               <button
                 key={label}
-                onClick={() => { setIsLogin(mode); setError(null); setMessage(null); }}
-                style={{
-                  flex: 1,
-                  padding: "10px 0",
-                  fontFamily: "'DM Mono', monospace",
-                  fontSize: 11,
-                  fontWeight: 500,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  border: "none",
-                  background: isLogin === mode ? "#0a0a0a" : "#fafafa",
-                  color: isLogin === mode ? "#fff" : "#a3a3a3",
-                  cursor: "pointer",
-                  transition: "background 0.15s, color 0.15s",
+                onClick={() => {
+                  setIsLogin(mode);
+                  setError(null);
+                  setMessage(null);
                 }}
+                style={styles.modeButton(isLogin === mode)}
               >
                 {label}
               </button>
             ))}
           </div>
 
-          <p style={{ fontSize: 14, color: "#737373", fontWeight: 400, lineHeight: 1.5, marginBottom: 28 }}>
+          <p
+            style={{
+              fontSize: 14,
+              color: "#737373",
+              fontWeight: 400,
+              lineHeight: 1.5,
+              marginBottom: 28,
+            }}
+          >
             {isLogin
               ? "Enter your credentials to access your enterprise dashboard."
               : "Set up your workspace to begin syncing telemetry data."}
           </p>
 
-          {/* Social buttons */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 24 }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 10,
+              marginBottom: 24,
+            }}
+          >
             {[
               {
                 label: "Google",
                 icon: (
                   <svg width="16" height="16" viewBox="0 0 24 24">
-                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                    <path
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                      fill="#4285F4"
+                    />
+                    <path
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      fill="#34A853"
+                    />
+                    <path
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                      fill="#FBBC05"
+                    />
+                    <path
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                      fill="#EA4335"
+                    />
                   </svg>
                 ),
                 onClick: handleGoogleLogin,
@@ -418,10 +597,10 @@ export default function Auth() {
                 label: "Microsoft",
                 icon: (
                   <svg width="16" height="16" viewBox="0 0 21 21">
-                    <path d="M1 1h9v9H1z" fill="#F25022"/>
-                    <path d="M11 1h9v9h-9z" fill="#7FBA00"/>
-                    <path d="M1 11h9v9H1z" fill="#00A4EF"/>
-                    <path d="M11 11h9v9h-9z" fill="#FFB900"/>
+                    <path d="M1 1h9v9H1z" fill="#F25022" />
+                    <path d="M11 1h9v9h-9z" fill="#7FBA00" />
+                    <path d="M1 11h9v9H1z" fill="#00A4EF" />
+                    <path d="M11 11h9v9h-9z" fill="#FFB900" />
                   </svg>
                 ),
                 onClick: handleMicrosoftLogin,
@@ -431,26 +610,15 @@ export default function Auth() {
                 key={label}
                 onClick={onClick}
                 disabled={loading}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 10,
-                  padding: "11px 16px",
-                  border: "1px solid #e5e5e5",
-                  borderRadius: 6,
-                  background: "#fafafa",
-                  cursor: "pointer",
-                  fontFamily: "'DM Mono', monospace",
-                  fontSize: 11,
-                  fontWeight: 500,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  color: "#525252",
-                  transition: "border-color 0.15s, background 0.15s, color 0.15s",
+                style={styles.socialButton}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.borderColor = "#d4d4d4";
+                  e.currentTarget.style.color = "#0a0a0a";
                 }}
-                onMouseOver={(e) => { e.currentTarget.style.borderColor = "#d4d4d4"; e.currentTarget.style.color = "#0a0a0a"; }}
-                onMouseOut={(e) => { e.currentTarget.style.borderColor = "#e5e5e5"; e.currentTarget.style.color = "#525252"; }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.borderColor = "#e5e5e5";
+                  e.currentTarget.style.color = "#525252";
+                }}
               >
                 {icon}
                 {label}
@@ -458,8 +626,14 @@ export default function Auth() {
             ))}
           </div>
 
-          {/* Divider */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              marginBottom: 24,
+            }}
+          >
             <div style={{ flex: 1, height: 1, background: "#f0f0f0" }} />
             <span
               style={{
@@ -476,41 +650,9 @@ export default function Auth() {
             <div style={{ flex: 1, height: 1, background: "#f0f0f0" }} />
           </div>
 
-          {/* Alerts */}
-          {error && (
-            <div
-              style={{
-                background: "#fef2f2",
-                border: "1px solid #fecaca",
-                borderRadius: 6,
-                padding: "12px 14px",
-                fontSize: 13,
-                color: "#dc2626",
-                marginBottom: 16,
-                animation: "slideUp 0.2s ease",
-              }}
-            >
-              {error}
-            </div>
-          )}
-          {message && (
-            <div
-              style={{
-                background: "#ecfdf5",
-                border: "1px solid #a7f3d0",
-                borderRadius: 6,
-                padding: "12px 14px",
-                fontSize: 13,
-                color: "#059669",
-                marginBottom: 16,
-                animation: "slideUp 0.2s ease",
-              }}
-            >
-              {message}
-            </div>
-          )}
+          {error && <div style={styles.errorAlert}>{error}</div>}
+          {message && <div style={styles.successAlert}>{message}</div>}
 
-          {/* Form */}
           <form onSubmit={handleEmailAuth}>
             {!isLogin && (
               <>
@@ -534,7 +676,6 @@ export default function Auth() {
                 </FieldWrap>
               </>
             )}
-
             <FieldWrap label="Work Email">
               <AuthInput
                 type="email"
@@ -544,9 +685,15 @@ export default function Auth() {
                 required
               />
             </FieldWrap>
-
             <div style={{ marginBottom: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 8,
+                }}
+              >
                 <span
                   style={{
                     fontFamily: "'DM Mono', monospace",
@@ -588,33 +735,16 @@ export default function Auth() {
                 minLength={6}
               />
             </div>
-
             <button
               type="submit"
               disabled={loading}
-              style={{
-                width: "100%",
-                padding: "13px 0",
-                background: "#0a0a0a",
-                color: "#fff",
-                border: "none",
-                borderRadius: 6,
-                fontFamily: "'DM Mono', monospace",
-                fontSize: 11,
-                fontWeight: 500,
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                cursor: loading ? "not-allowed" : "pointer",
-                opacity: loading ? 0.6 : 1,
-                marginTop: 8,
-                transition: "background 0.2s",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 10,
+              style={styles.submitButton(loading)}
+              onMouseOver={(e) => {
+                if (!loading) e.currentTarget.style.background = "#1a1a1a";
               }}
-              onMouseOver={(e) => { if (!loading) e.currentTarget.style.background = "#1a1a1a"; }}
-              onMouseOut={(e) => { e.currentTarget.style.background = "#0a0a0a"; }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = "#0a0a0a";
+              }}
             >
               {loading ? (
                 <>
@@ -639,7 +769,14 @@ export default function Auth() {
             </button>
           </form>
 
-          <p style={{ textAlign: "center", marginTop: 20, fontSize: 13, color: "#737373" }}>
+          <p
+            style={{
+              textAlign: "center",
+              marginTop: 20,
+              fontSize: 13,
+              color: "#737373",
+            }}
+          >
             {isLogin ? "Don't have an account? " : "Already have an account? "}
             <button
               type="button"
@@ -660,51 +797,5 @@ export default function Auth() {
         </div>
       </div>
     </div>
-  );
-}
-
-function FieldWrap({ label, children }) {
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <label
-        style={{
-          display: "block",
-          fontFamily: "'DM Mono', monospace",
-          fontSize: 10,
-          fontWeight: 500,
-          color: "#0a0a0a",
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          marginBottom: 8,
-        }}
-      >
-        {label}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-function AuthInput(props) {
-  const [focused, setFocused] = useState(false);
-  return (
-    <input
-      {...props}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      style={{
-        width: "100%",
-        fontFamily: "'DM Sans', sans-serif",
-        fontSize: 14,
-        fontWeight: 400,
-        padding: "11px 14px",
-        border: `1px solid ${focused ? "#059669" : "#e5e5e5"}`,
-        borderRadius: 6,
-        background: focused ? "#fff" : "#fafafa",
-        color: "#0a0a0a",
-        outline: "none",
-        transition: "border-color 0.2s, background 0.2s",
-      }}
-    />
   );
 }

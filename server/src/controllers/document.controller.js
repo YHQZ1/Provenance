@@ -1,9 +1,7 @@
 import { documentService } from "../services/internal/document.service.js";
+import { supabaseAdmin } from "../config/database.js";
 
 export const documentController = {
-  /**
-   * POST /documents/upload
-   */
   async upload(req, res, next) {
     try {
       if (!req.file) {
@@ -15,7 +13,7 @@ export const documentController = {
 
       const document = await documentService.createDocument(
         req.user.id,
-        req.file
+        req.file,
       );
 
       res.status(201).json({
@@ -33,14 +31,11 @@ export const documentController = {
     }
   },
 
-  /**
-   * GET /documents
-   */
   async list(req, res, next) {
     try {
       const result = await documentService.listDocuments(req.user.id, {
-        page: req.query.page,
-        limit: req.query.limit,
+        page: parseInt(req.query.page) || 1,
+        limit: parseInt(req.query.limit) || 20,
         status: req.query.status,
       });
 
@@ -54,14 +49,11 @@ export const documentController = {
     }
   },
 
-  /**
-   * GET /documents/:id
-   */
   async getById(req, res, next) {
     try {
       const document = await documentService.getDocument(
         req.params.id,
-        req.user.id
+        req.user.id,
       );
 
       res.json({
@@ -73,17 +65,12 @@ export const documentController = {
     }
   },
 
-  /**
-   * GET /documents/:id/status
-   */
   async getStatus(req, res, next) {
     try {
-      const { supabaseAdmin } = await import("../config/database.js");
-      
       const { data: document, error } = await supabaseAdmin
         .from("documents")
         .select(
-          "id, status, ocr_confidence, rag_confidence, requires_human_review, verified_by_user, updated_at, error_message"
+          "id, status, ocr_confidence, rag_confidence, requires_human_review, verified_by_user, updated_at, error_message",
         )
         .eq("id", req.params.id)
         .eq("company_id", req.user.id)
@@ -105,51 +92,34 @@ export const documentController = {
     }
   },
 
-  /**
-   * POST /webhooks/ocr/complete
-   * Called by OCR service when processing completes
-   */
-  async handleOcrWebhook(req, res, next) {
+  async deleteDocument(req, res, next) {
     try {
-      const { document_id, raw_text, extracted_data, confidence, status } =
-        req.body;
+      const { id } = req.params;
 
-      if (status === "FAILED") {
-        await documentService.handleOcrFailure(document_id, req.body.error);
-        return res.json({ success: true, message: "OCR failure recorded" });
+      const { data: document, error: fetchError } = await supabaseAdmin
+        .from("documents")
+        .select("id, file_path")
+        .eq("id", id)
+        .eq("company_id", req.user.id)
+        .single();
+
+      if (fetchError || !document) {
+        return res.status(404).json({
+          success: false,
+          message: "Document not found",
+        });
       }
 
-      await documentService.handleOcrComplete(document_id, {
-        raw_text,
-        extracted_data,
-        confidence,
+      await supabaseAdmin
+        .from("document_classifications")
+        .delete()
+        .eq("document_id", id);
+      await supabaseAdmin.from("documents").delete().eq("id", id);
+
+      res.json({
+        success: true,
+        message: "Document deleted successfully",
       });
-
-      res.json({ success: true, message: "OCR results processed" });
-    } catch (error) {
-      next(error);
-    }
-  },
-
-  /**
-   * POST /webhooks/rag/complete
-   * Called by RAG service when classification completes
-   */
-  async handleRagWebhook(req, res, next) {
-    try {
-      const { document_id, classifications, status, error: ragError } =
-        req.body;
-
-      if (status === "FAILED") {
-        await documentService.handleRagFailure(document_id, ragError);
-        return res.json({ success: true, message: "RAG failure recorded" });
-      }
-
-      await documentService.handleRagComplete(document_id, {
-        classifications,
-      });
-
-      res.json({ success: true, message: "RAG results processed" });
     } catch (error) {
       next(error);
     }

@@ -3,19 +3,26 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import { errorHandler, notFound } from "./middleware/error.middleware.js";
 import { env } from "./config/env.js";
-
 import authRoutes from "./routes/auth.routes.js";
-import documentRoutes from "./routes/documents.routes.js";
+import documentRoutes from "./routes/document.routes.js";
 import companyRoutes from "./routes/company.routes.js";
+import feedbackRoutes from "./routes/feedback.routes.js";
+import complianceRoutes from "./routes/compliance.routes.js";
 
 const app = express();
 
 app.use(
   cors({
-    origin: env.CORS_ORIGIN.split(","),
+    origin: env.CORS_ORIGIN.split(",").map((origin) => origin.trim()),
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-User-ID",
+      "X-User-Email",
+      "X-Gateway-Verified",
+    ],
   }),
 );
 
@@ -31,6 +38,8 @@ app.get("/health", (_, res) =>
 app.use("/api/auth", authRoutes);
 app.use("/api/company", companyRoutes);
 app.use("/api/documents", documentRoutes);
+app.use("/api/feedback", feedbackRoutes);
+app.use("/api/compliance", complianceRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

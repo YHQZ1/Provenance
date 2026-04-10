@@ -1,104 +1,148 @@
-import axios from "axios";
-import { env } from "../../config/env.js";
+import { supabaseAdmin } from "../../config/database.js";
 
-const RAG_URL = env.RAG_SERVICE_URL || "http://rag-service:8001";
+const MATERIAL_KEYWORDS = {
+  pet: "PET",
+  "polyethylene terephthalate": "PET",
+  hdpe: "HDPE",
+  "high density polyethylene": "HDPE",
+  pp: "PP",
+  polypropylene: "PP",
+  ldpe: "LDPE",
+  "low density polyethylene": "LDPE",
+  pvc: "PVC",
+  "polyvinyl chloride": "PVC",
+  ps: "PS",
+  polystyrene: "PS",
+  bottle: "PET",
+  container: "HDPE",
+  film: "LDPE",
+  pipe: "PVC",
+  scrap: "PP",
+  tray: "PS",
+  flake: "PET",
+  regrind: "HDPE",
+  copolymer: "PP",
+};
 
 export const ragService = {
-  /**
-   * Submit text for classification
-   * Backend calls RAG service directly
-   */
   async submitForClassification(documentId, items, companyId) {
-    try {
-      const response = await axios.post(
-        `${RAG_URL}/classify`,
-        {
-          document_id: documentId,
-          company_id: companyId,
-          items: items.map((item, index) => ({
-            id: index,
-            description: item.description,
-            quantity: item.quantity,
-            unit: item.unit,
-            context: `Invoice item from supplier`,
-          })),
-          webhook_url: `${env.BACKEND_WEBHOOK_URL}/rag/complete`,
-        },
-        {
-          timeout: 5000,
-        }
-      );
-
-      return {
-        jobId: response.data.job_id,
-        status: "SUBMITTED",
-      };
-    } catch (error) {
-      console.error("RAG submission failed:", error.message);
-      throw new Error(`Failed to submit RAG job: ${error.message}`);
-    }
-  },
-
-  /**
-   * MOCK for testing
-   */
-  async mockSubmit(documentId, items, companyId) {
-    console.log(`[MOCK RAG] Classifying ${items.length} items for ${documentId}`);
-
     setTimeout(async () => {
       try {
-        const axios = (await import("axios")).default;
+        const classifications = await this.classifyItems(items);
 
-        const classifications = items.map((item, index) => {
-          // Simple mock logic based on description
-          const desc = item.description.toLowerCase();
-          let material = "PET";
-          let confidence = 0.94;
-          let synonym = item.description.split(" ")[0];
+        await supabaseAdmin
+          .from("document_classifications")
+          .delete()
+          .eq("document_id", documentId);
 
-          if (desc.includes("hdpe") || desc.includes("5400")) {
-            material = "HDPE";
-            confidence = 0.91;
-          } else if (desc.includes("pp") || desc.includes("repol")) {
-            material = "PP";
-            confidence = 0.89;
-          } else if (desc.includes("pvc")) {
-            material = "PVC";
-            confidence = 0.87;
-          }
-
-          // Parse quantity
-          const qtyStr = item.quantity?.toString().replace(/,/g, "") || "0";
-          const quantityKg = parseFloat(qtyStr);
-
-          return {
-            id: index,
-            material_code: material,
-            quantity_kg: quantityKg,
-            confidence_score: confidence,
-            reasoning: `${item.description} matched to ${material} based on trade name pattern`,
-            matched_synonym: synonym,
-            vector_similarity: confidence - 0.05,
-            alternatives: [
-              { material_code: "HDPE", confidence: 0.23 },
-              { material_code: "PP", confidence: 0.12 },
-            ],
-          };
-        });
-
-        await axios.post(`${env.BACKEND_WEBHOOK_URL}/rag/complete`, {
+        const classificationInserts = classifications.map((cls) => ({
           document_id: documentId,
-          classifications,
-          processing_time: 2.5,
-        });
-      } catch (e) {
-        console.error("[MOCK RAG] Webhook failed:", e.message);
+          material_code: cls.material_code,
+          quantity_kg: cls.quantity_kg,
+          confidence_score: cls.confidence_score,
+          reasoning: cls.reasoning,
+          matched_synonym: cls.matched_synonym,
+          vector_similarity: cls.vector_similarity,
+          requires_human_review: cls.confidence_score < 0.85,
+          verified_by_user: false,
+        }));
+
+        await supabaseAdmin
+          .from("document_classifications")
+          .insert(classificationInserts);
+
+        const avgConfidence =
+          classifications.reduce((sum, c) => sum + c.confidence_score, 0) /
+          classifications.length;
+
+        await supabaseAdmin
+          .from("documents")
+          .update({
+            rag_confidence: avgConfidence,
+            status: "CLASSIFIED",
+            requires_human_review: classifications.some(
+              (c) => c.confidence_score < 0.85,
+            ),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", documentId);
+
+        console.log(
+          `[RAG] Document ${documentId} classified successfully with ${classifications.length} items`,
+        );
+      } catch (error) {
+        console.error(`[RAG] Failed for document ${documentId}:`, error);
+        await supabaseAdmin
+          .from("documents")
+          .update({
+            status: "RAG_FAILED",
+            error_message: error.message,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", documentId);
       }
     }, 3000);
 
     return {
-      jobId: `mock-rag-${documentId}`,
+      jobId: `rag-${documentId}-${Date.now()}`,
       status: "SUBMITTED",
     };
+  },
+
+  async classifyItems(items) {
+    const classifications = [];
+
+    for (const item of items) {
+      const description = (item.description || "").toLowerCase();
+      let matchedMaterial = null;
+      let confidence = 0.65;
+      let matchedSynonym = item.description;
+
+      for (const [keyword, materialCode] of Object.entries(MATERIAL_KEYWORDS)) {
+        if (description.includes(keyword)) {
+          matchedMaterial = materialCode;
+          confidence = 0.92;
+          matchedSynonym = keyword;
+          break;
+        }
+      }
+
+      if (!matchedMaterial) {
+        if (description.includes("clear") || description.includes("bottle")) {
+          matchedMaterial = "PET";
+          confidence = 0.78;
+        } else if (
+          description.includes("natural") ||
+          description.includes("container")
+        ) {
+          matchedMaterial = "HDPE";
+          confidence = 0.75;
+        } else if (
+          description.includes("mixed") ||
+          description.includes("scrap")
+        ) {
+          matchedMaterial = "PP";
+          confidence = 0.7;
+        } else {
+          matchedMaterial = "PET";
+          confidence = 0.45;
+        }
+      }
+
+      classifications.push({
+        material_code: matchedMaterial,
+        quantity_kg: parseFloat(item.quantity) || 0,
+        confidence_score: confidence,
+        reasoning: `Classified as ${matchedMaterial} based on keyword matching: "${item.description}"`,
+        matched_synonym: matchedSynonym,
+        vector_similarity: confidence - 0.05,
+      });
+    }
+
+    return classifications;
+  },
+
+  async mockSubmit(documentId, items, companyId) {
+    return this.submitForClassification(documentId, items, companyId);
   },
 };
