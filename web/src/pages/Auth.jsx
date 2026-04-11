@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 
@@ -230,6 +230,10 @@ export default function Auth() {
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
 
+  // ✅ FIX 1: Guard so the init effect only ever runs once,
+  //    preventing double-execution on re-renders / StrictMode.
+  const didInit = useRef(false);
+
   const API_URL = import.meta.env.VITE_API_URL;
   const navigate = useNavigate();
 
@@ -243,13 +247,31 @@ export default function Auth() {
     if (!response.ok) throw new Error("Failed to sync with backend");
   };
 
+  // ✅ FIX 2: Never sign the user out on a sync failure.
+  //    Just log a warning and proceed to the dashboard.
+  //    Signing out here was what destroyed the session that
+  //    ProtectedRoute was watching, causing the redirect loop.
+  const syncSafe = async (token) => {
+    try {
+      await syncWithBackend(token);
+    } catch (err) {
+      console.warn("Backend sync failed, proceeding anyway:", err.message);
+    }
+  };
+
   const redirectToHome = (msg) => {
     setTransitionMessage(msg);
+    setTransitioning(true);
     navigate("/dashboard", { replace: true });
   };
 
   useEffect(() => {
+    // ✅ FIX 1 (continued): Bail out if already ran.
+    if (didInit.current) return;
+    didInit.current = true;
+
     const handleAuth = async () => {
+      // --- Handle OAuth redirect (Google / Microsoft) ---
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
       const accessToken = hashParams.get("access_token");
 
@@ -261,39 +283,38 @@ export default function Auth() {
           access_token: accessToken,
           refresh_token: hashParams.get("refresh_token"),
         });
+
         if (error || !session) {
+          setError("OAuth sign-in failed. Please try again.");
           setInitializing(false);
           return;
         }
+
         window.history.replaceState(
           {},
           document.title,
           window.location.pathname,
         );
-        try {
-          await syncWithBackend(session.access_token);
-          await redirectToHome("Signing in...");
-        } catch {
-          setError("Failed to complete sign in. Please try again.");
-          setInitializing(false);
-        }
+        await syncSafe(session.access_token);
+        redirectToHome("Signing in...");
         return;
       }
 
+      // --- Handle already-logged-in user landing on /auth ---
       const {
         data: { session },
       } = await supabase.auth.getSession();
+
       if (session) {
-        try {
-          await syncWithBackend(session.access_token);
-          navigate("/dashboard", { replace: true });
-          return;
-        } catch {
-          await supabase.auth.signOut();
-        }
+        // ✅ FIX 2 (continued): Don't sign out on failure — just navigate.
+        await syncSafe(session.access_token);
+        navigate("/dashboard", { replace: true });
+        return;
       }
+
       setInitializing(false);
     };
+
     handleAuth();
   }, []);
 
@@ -342,8 +363,8 @@ export default function Auth() {
         if (error) throw new Error(error.message);
         if (!data.session) throw new Error("Login failed. Please try again.");
         localStorage.setItem("sb-access-token", data.session.access_token);
-        await syncWithBackend(data.session.access_token);
-        await redirectToHome("Signing in...");
+        await syncSafe(data.session.access_token);
+        redirectToHome("Signing in...");
       } else {
         const { data, error } = await supabase.auth.signUp({
           email,
@@ -361,8 +382,8 @@ export default function Auth() {
           return;
         }
         localStorage.setItem("sb-access-token", data.session.access_token);
-        await syncWithBackend(data.session.access_token);
-        await redirectToHome("Creating your workspace...");
+        await syncSafe(data.session.access_token);
+        redirectToHome("Creating your workspace...");
       }
     } catch (err) {
       setError(err.message);
