@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
@@ -242,11 +243,9 @@ export default function Auth() {
     if (!response.ok) throw new Error("Failed to sync with backend");
   };
 
-  const redirectToHome = async (msg) => {
+  const redirectToHome = (msg) => {
     setTransitionMessage(msg);
-    setTransitioning(true);
-    await new Promise((r) => setTimeout(r, 900));
-    navigate("/dashboard");
+    navigate("/dashboard", { replace: true });
   };
 
   useEffect(() => {
@@ -287,7 +286,8 @@ export default function Auth() {
       if (session) {
         try {
           await syncWithBackend(session.access_token);
-          await redirectToHome("Resuming session...");
+          navigate("/dashboard", { replace: true });
+          return;
         } catch {
           await supabase.auth.signOut();
         }
