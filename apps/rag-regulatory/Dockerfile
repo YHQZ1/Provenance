@@ -6,7 +6,7 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir --timeout 300 torch==2.1.2 --index-url https://download.pytorch.org/whl/cpu && pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --timeout 1200 torch==2.1.2 --index-url https://download.pytorch.org/whl/cpu && pip install --no-cache-dir --timeout 1200 -r requirements.txt
 
 COPY src ./src
 COPY scripts ./scripts
