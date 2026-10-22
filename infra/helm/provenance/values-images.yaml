@@ -10,4 +10,4 @@ apps:
   rag-classify:
     image: ghcr.io/yhqz1/provenance-rag-classify:fb5355126e69
   rag-regulatory:
-    image: ghcr.io/yhqz1/provenance-rag-regulatory:e8568c01b8af
+    image: ghcr.io/yhqz1/provenance-rag-regulatory:eaba4a855fe8
