@@ -88,7 +88,7 @@ test("falls back to purchase invoice for unknown document types", () => {
   assert.equal(normalizeDocumentType("utility"), "purchase_invoice");
 });
 
-import { documentTypeOf } from "../src/services/external/normalization.js";
+import { documentTypeOf, resolveDocumentType } from "../src/services/external/normalization.js";
 
 test("treats legacy OCR document types as purchase invoices", () => {
   assert.equal(documentTypeOf({ document_type: "invoice" }), "purchase_invoice");
@@ -100,4 +100,19 @@ test("parses month-name document dates", () => {
   assert.equal(parseDocumentDate("12-Jul-22"), "2022-07-12");
   assert.equal(parseDocumentDate("3rd Sept 2026"), "2026-09-03");
   assert.equal(parseDocumentDate("12 Foo 2022"), null);
+});
+
+test("a detected certificate, receipt or EPR record overrides the chosen type", () => {
+  assert.equal(
+    resolveDocumentType("purchase_invoice", "recycling_certificate"),
+    "recycling_certificate",
+  );
+  assert.equal(resolveDocumentType("purchase_invoice", "collection_receipt"), "collection_receipt");
+  assert.equal(resolveDocumentType("purchase_invoice", "epr_record"), "epr_record");
+});
+
+test("a generic or unknown detection keeps the chosen type", () => {
+  assert.equal(resolveDocumentType("recycling_certificate", "invoice"), "recycling_certificate");
+  assert.equal(resolveDocumentType("collection_receipt", "unknown"), "collection_receipt");
+  assert.equal(resolveDocumentType(undefined, "unknown"), "purchase_invoice");
 });
