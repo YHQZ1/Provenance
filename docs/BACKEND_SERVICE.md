@@ -124,6 +124,7 @@ Every route except `GET /health` needs `Authorization: Bearer <Supabase access t
 | `POST` | `/api/feedback/:id/approve` | Accept the suggestion as is |
 | `POST` | `/api/feedback/:id/correct` | `{ material_code, quantity_kg, cpcb_category?, notes? }`, then approve |
 | `POST` | `/api/feedback/:id/exclude` | `{ reason }`: kept on record, counts toward nothing |
+| `POST` | `/api/feedback/lines` | `{ document_id, description, material_code, quantity_kg, cpcb_category?, notes? }`: adds a row the reader missed, already approved by the reviewer. Removes the "no line items detected" placeholder. Refused for EPR records and finalized years |
 | `POST` | `/api/feedback/approve-suggested` | Approve every complete, high-confidence line (optionally for one document) |
 
 ### Filing and research
@@ -160,6 +161,7 @@ Every route except `GET /health` needs `Authorization: Bearer <Supabase access t
 Rules are enforced here, not in the UI, and the database lets clients read only (see [DATABASE.md](DATABASE.md#row-level-security)).
 
 - **Duplicates.** The same file (by SHA-256) can't be uploaded twice per company. The `409` response names the existing file and its financial year. A unique index catches simultaneous uploads.
+- **Document type.** The type chosen at upload is kept unless the OCR service reads a recycling certificate, collection receipt or EPR record from the heading, in which case that type wins and the document's reasoning says so. Review wording follows the type: invoice lines count toward plastic introduced, certificate lines toward recycled, receipt lines toward collected.
 - **Review.** Only a person marks a line verified. Approving needs a material and a weight in kg. Every decision stores the reviewer's id, name and time. A correction that changes the suggestion is also logged to `classification_feedback`.
 - **Financial year.** A document belongs to the FY of its invoice date, otherwise its upload date. See [ARCHITECTURE.md](ARCHITECTURE.md#filing-model) for the ledger, blockers and warnings.
 - **Finalized years.** These are read-only. Review actions, date changes, retries, and deletes of documents in the snapshot return `409` until the year is reopened. A document can't be moved into a finalized year either.
