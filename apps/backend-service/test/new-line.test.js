@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateNewLine } from "../src/services/internal/feedback.service.js";
+import { validateNewLine } from "../src/services/internal/new-line.js";
 
 const valid = { description: " HDPE bottle 1 L ", material_code: "HDPE", quantity_kg: "1200.5" };
 
