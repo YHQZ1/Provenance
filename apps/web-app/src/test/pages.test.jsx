@@ -247,6 +247,36 @@ describe("Review", () => {
     expect(screen.getByRole("button", { name: /approve 1 suggested/i })).toBeTruthy();
     expect(screen.getAllByText("500 kg").length).toBeGreaterThan(0);
   });
+
+  it("words the review for a recycling certificate and offers to add a line", async () => {
+    const { reviewAPI } = await import("../lib/api");
+    reviewAPI.queue.mockResolvedValueOnce({
+      data: [
+        {
+          id: "c2",
+          document_id: "d2",
+          document_filename: "greenloop-certificate.pdf",
+          document_type: "recycling_certificate",
+          line_description: "PET bottles (post-consumer)",
+          material_code: "PET",
+          quantity_kg: 17150,
+          confidence_score: 0.95,
+          reasoning: "PET is the base material.",
+          suggested: true,
+        },
+      ],
+    });
+    const { default: Review } = await import("../pages/Review");
+    renderPage(<Review />);
+
+    expect(await screen.findByText(/Certificate line/)).toBeTruthy();
+    expect(screen.getByText("Counts toward plastic recycled")).toBeTruthy();
+    expect(screen.getByText("Recycled weight")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /add a missing line from this certificate/i }),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Invoice line/)).toBeNull();
+  });
 });
 
 describe("Documents upload", () => {

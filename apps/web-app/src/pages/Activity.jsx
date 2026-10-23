@@ -39,6 +39,7 @@ const ICONS = {
   "document.redated": Pencil,
   "line.approved": Check,
   "line.corrected": Pencil,
+  "line.added": Check,
   "line.excluded": Ban,
   "lines.approved_in_bulk": CheckCheck,
   "filing.finalized": Lock,
@@ -79,6 +80,8 @@ const detailLine = (event) => {
   switch (event.action) {
     case "line.approved":
       return [d.line, d.quantity_kg != null && formatKgExact(d.quantity_kg)];
+    case "line.added":
+      return [d.to?.material_code, d.to?.quantity_kg != null && formatKgExact(d.to.quantity_kg)];
     case "line.corrected":
       return [
         d.line,

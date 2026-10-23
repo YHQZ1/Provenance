@@ -28,6 +28,32 @@ export const DOCUMENT_TYPES = [
 export const documentTypeLabel = (id) =>
   DOCUMENT_TYPES.find((t) => t.id === id)?.label || "Purchase invoice";
 
+export const documentTypeShort = (id) =>
+  DOCUMENT_TYPES.find((t) => t.id === id)?.short || "Invoice";
+
+const DOCUMENT_COPY = {
+  purchase_invoice: {
+    noun: "invoice",
+    line: "Invoice line",
+    weight: "Weight",
+    effect: "Counts toward plastic introduced",
+  },
+  recycling_certificate: {
+    noun: "certificate",
+    line: "Certificate line",
+    weight: "Recycled weight",
+    effect: "Counts toward plastic recycled",
+  },
+  collection_receipt: {
+    noun: "receipt",
+    line: "Collection line",
+    weight: "Collected weight",
+    effect: "Counts toward plastic collected",
+  },
+};
+
+export const documentCopy = (id) => DOCUMENT_COPY[id] || DOCUMENT_COPY.purchase_invoice;
+
 export const MATERIALS = [
   { code: "PET", name: "PET — polyethylene terephthalate" },
   { code: "HDPE", name: "HDPE — high-density polyethylene" },
