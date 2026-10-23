@@ -20,7 +20,8 @@
    - quantities with units: kg, g, tonnes, quintals, plus counts and lengths, which are kept as non-weights;
    - Indian and international number formats (`1,00,000.50`, `100,000.50`);
    - dates in day-first and month-name forms, including labels stacked above values;
-   - table rows, while skipping totals rows.
+   - table rows, while skipping totals rows;
+   - row-anchored tables, tried first: invoice rows with a quantity, unit and rate (HSN codes may be split, as in `3920 10`), invoice rows by pieces and unit weight (the net weight in kg is used), recycling certificate rows (the recycled quantity is used) and collection receipt rows (the net quantity is used). Descriptions wrapped above or below the numbers are joined back together, period text is dropped from certificate descriptions, and service lines such as freight are skipped. If no row is found, the older line patterns run instead.
 
 PaddleOCR isn't thread-safe. Calls are serialised with a lock and run in a worker thread, so concurrent uploads queue instead of crashing.
 
