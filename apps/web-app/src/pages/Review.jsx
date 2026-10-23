@@ -7,11 +7,19 @@ import {
   ClipboardCheck,
   FileText,
   Pencil,
+  Plus,
   Sparkles,
   X,
 } from "lucide-react";
 import { documentAPI, reviewAPI } from "../lib/api";
-import { CPCB_CATEGORIES, MATERIALS, documentTypeLabel, formatKgExact } from "../lib/domain";
+import {
+  CPCB_CATEGORIES,
+  MATERIALS,
+  documentCopy,
+  documentTypeLabel,
+  documentTypeShort,
+  formatKgExact,
+} from "../lib/domain";
 import { useWorkspace } from "../lib/workspace";
 import {
   Alert,
@@ -41,7 +49,7 @@ const REASONS = {
     label: "Suggested",
     tone: "ok",
     title: "The suggestion looks complete",
-    body: "Material, weight and confidence all check out. Compare it with the invoice, then approve.",
+    body: "Material, weight and confidence all check out. Compare it with the {doc}, then approve.",
   },
   material: {
     label: "Needs material",
@@ -53,13 +61,13 @@ const REASONS = {
     label: "Needs weight",
     tone: "warn",
     title: "The quantity isn't a weight",
-    body: "The invoice gives a count or another unit, not kilograms. Enter the weight in kg.",
+    body: "The {doc} gives a count or another unit, not kilograms. Enter the weight in kg.",
   },
   check: {
     label: "Check suggestion",
     tone: "warn",
     title: "The suggestion is uncertain",
-    body: "Confidence is low, or the description points to a different packaging category. Confirm or correct it against the invoice.",
+    body: "Confidence is low, or the description points to a different packaging category. Confirm or correct it against the {doc}.",
   },
 };
 
@@ -191,9 +199,136 @@ function Fact({ label, value, hint, muted }) {
   );
 }
 
-function DecisionPanel({ item, position, categoriesTracked, onDone, modeRequest }) {
+function AddLineModal({ open, onClose, documentId, copy, categoriesTracked, onAdded }) {
+  const [description, setDescription] = useState("");
+  const [material, setMaterial] = useState("");
+  const [category, setCategory] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const notify = useToast();
+  const valid = description.trim() !== "" && material !== "" && Number(quantity) > 0;
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await reviewAPI.addLine({
+        document_id: documentId,
+        description,
+        material_code: material,
+        quantity_kg: Number(quantity),
+        ...(categoriesTracked && { cpcb_category: category || null }),
+        notes,
+      });
+      notify("Line added and approved");
+      setDescription("");
+      setMaterial("");
+      setCategory("");
+      setQuantity("");
+      setNotes("");
+      onClose();
+      onAdded();
+    } catch (error) {
+      notify(error.message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={`Add a line from this ${copy.noun}`}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={save} loading={saving} disabled={!valid}>
+            <Check className="size-4" /> Add and approve
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <p className="text-sm text-neutral-600">
+          Use this for a row the reader missed. The line is recorded as approved by you, and the
+          placeholder for a document with no detected lines is removed.
+        </p>
+        <Field label="Description" htmlFor="add-description">
+          <Input
+            id="add-description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder={`As written on the ${copy.noun}, e.g. HDPE bottle 1 L`}
+            maxLength={200}
+          />
+        </Field>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Material" htmlFor="add-material">
+            <Select
+              id="add-material"
+              value={material}
+              onChange={(e) => setMaterial(e.target.value)}
+            >
+              <option value="">Choose material</option>
+              {MATERIALS.map((m) => (
+                <option key={m.code} value={m.code}>
+                  {m.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label={`${copy.weight} (kg)`} htmlFor="add-quantity">
+            <Input
+              id="add-quantity"
+              type="number"
+              min="0"
+              step="0.001"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              className="mono"
+            />
+          </Field>
+        </div>
+        {categoriesTracked && (
+          <Field label="CPCB category" htmlFor="add-category">
+            <Select
+              id="add-category"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+            >
+              <option value="">Not sure</option>
+              {Object.entries(CPCB_CATEGORIES)
+                .filter(([key]) => key !== "UNCATEGORISED")
+                .map(([key, value]) => (
+                  <option key={key} value={key}>
+                    {value.short} · {value.label}
+                  </option>
+                ))}
+            </Select>
+          </Field>
+        )}
+        <Field label="Note (optional)" htmlFor="add-note">
+          <Textarea
+            id="add-note"
+            rows={2}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+          />
+        </Field>
+      </div>
+    </Modal>
+  );
+}
+
+function DecisionPanel({ item, position, categoriesTracked, onDone, onAdded, modeRequest }) {
   const reason = reasonOf(item);
-  const meta = REASONS[reason];
+  const copy = documentCopy(item.document_type);
+  const meta = {
+    ...REASONS[reason],
+    body: REASONS[reason].body.replaceAll("{doc}", copy.noun),
+  };
+  const [addOpen, setAddOpen] = useState(false);
   const canApprove = reason === "suggested" || reason === "check";
   const [mode, setMode] = useState(canApprove ? "view" : "edit");
   const [material, setMaterial] = useState(item.material_code || "");
@@ -257,7 +392,7 @@ function DecisionPanel({ item, position, categoriesTracked, onDone, modeRequest 
       <div>
         <div className="flex items-center justify-between gap-3">
           <p className="mono text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-500">
-            Invoice line · {position}
+            {copy.line} · {position}
           </p>
           <Badge tone={meta.tone}>{meta.label}</Badge>
         </div>
@@ -270,6 +405,7 @@ function DecisionPanel({ item, position, categoriesTracked, onDone, modeRequest 
         <p className="mt-1 text-sm text-neutral-500">
           {item.document_filename} · {documentTypeLabel(item.document_type)}
         </p>
+        <p className="mt-0.5 text-xs text-neutral-400">{copy.effect}</p>
       </div>
 
       <div
@@ -300,7 +436,7 @@ function DecisionPanel({ item, position, categoriesTracked, onDone, modeRequest 
           />
         )}
         <Fact
-          label="Weight"
+          label={copy.weight}
           value={item.quantity_kg == null ? "Not a weight" : formatKgExact(item.quantity_kg)}
           hint={
             item.confidence_score > 0
@@ -375,7 +511,7 @@ function DecisionPanel({ item, position, categoriesTracked, onDone, modeRequest 
                   </Select>
                 </Field>
               )}
-              <Field label="Weight (kg)" htmlFor="quantity">
+              <Field label={`${copy.weight} (kg)`} htmlFor="quantity">
                 <Input
                   id="quantity"
                   type="number"
@@ -479,6 +615,22 @@ function DecisionPanel({ item, position, categoriesTracked, onDone, modeRequest 
         )}
       </div>
 
+      {!locked && (
+        <div>
+          <Button variant="ghost" onClick={() => setAddOpen(true)}>
+            <Plus className="size-4" /> Add a missing line from this {copy.noun}
+          </Button>
+        </div>
+      )}
+      <AddLineModal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        documentId={item.document_id}
+        copy={copy}
+        categoriesTracked={categoriesTracked}
+        onAdded={onAdded}
+      />
+
       <p className="mono hidden text-[11px] text-neutral-400 lg:block">
         Keys: A approve · E edit · X exclude · ↑ ↓ move between lines
       </p>
@@ -488,8 +640,11 @@ function DecisionPanel({ item, position, categoriesTracked, onDone, modeRequest 
 
 function Guide({ onDismiss }) {
   const steps = [
-    ["Check", "Compare the line with the invoice on the right."],
-    ["Decide", "Approve it, correct it, or exclude it if it isn't plastic packaging."],
+    ["Check", "Compare the line with the document on the right."],
+    [
+      "Decide",
+      "Approve it, correct it, or exclude it if it isn't plastic packaging. Add any row the reader missed.",
+    ],
     ["Repeat", "The next line opens automatically. Only approved lines count toward your filing."],
   ];
   return (
@@ -589,7 +744,11 @@ export default function Review() {
     const map = new Map();
     for (const item of visible) {
       if (!map.has(item.document_id))
-        map.set(item.document_id, { name: item.document_filename, items: [] });
+        map.set(item.document_id, {
+          name: item.document_filename,
+          type: item.document_type,
+          items: [],
+        });
       map.get(item.document_id).items.push(item);
     }
     return [...map.entries()];
@@ -606,6 +765,12 @@ export default function Review() {
     setItems((current) => current.filter((item) => item.id !== id));
     setSelectedId(next?.id || null);
     setReviewedCount((count) => count + 1);
+    refreshFiling();
+  };
+
+  const handleAdded = async () => {
+    setReviewedCount((count) => count + 1);
+    await load();
     refreshFiling();
   };
 
@@ -828,8 +993,11 @@ export default function Review() {
               ) : (
                 groups.map(([documentId, group]) => (
                   <div key={documentId} className="border-b border-neutral-100 last:border-0">
-                    <p className="sticky top-0 truncate bg-white px-4 pb-1 pt-3 text-xs font-semibold text-neutral-500">
-                      {group.name}
+                    <p className="sticky top-0 flex items-center justify-between gap-2 bg-white px-4 pb-1 pt-3 text-xs font-semibold text-neutral-500">
+                      <span className="truncate">{group.name}</span>
+                      <span className="shrink-0 rounded-sm border border-neutral-200 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">
+                        {documentTypeShort(group.type)}
+                      </span>
                     </p>
                     <ul className="px-2 pb-2">
                       {group.items.map((item) => {
@@ -893,6 +1061,7 @@ export default function Review() {
                 position={positionOf(selected)}
                 categoriesTracked={Boolean(filing?.categories_tracked)}
                 onDone={handleDone}
+                onAdded={handleAdded}
                 modeRequest={modeRequest}
               />
               <SourcePanel

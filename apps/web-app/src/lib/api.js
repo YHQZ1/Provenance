@@ -80,6 +80,7 @@ export const reviewAPI = {
   approve: (id, notes) => api.post(`/feedback/${id}/approve`, { notes }),
   correct: (id, data) => api.post(`/feedback/${id}/correct`, data),
   exclude: (id, reason) => api.post(`/feedback/${id}/exclude`, { reason }),
+  addLine: (data) => api.post("/feedback/lines", data),
   approveSuggested: (documentId) =>
     api.post("/feedback/approve-suggested", { document_id: documentId }),
 };
