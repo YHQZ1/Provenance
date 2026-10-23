@@ -83,6 +83,19 @@ export const DOCUMENT_TYPES = {
   epr_record: "EPR record",
 };
 
+export const EMPTY_DOCUMENT_LINE = "Whole document (no line items detected)";
+
+const DETECTED_TYPES = {
+  recycling_certificate: "recycling_certificate",
+  collection_receipt: "collection_receipt",
+  epr_record: "epr_record",
+};
+
+export const resolveDocumentType = (chosen, detected) =>
+  Object.hasOwn(DETECTED_TYPES, detected)
+    ? DETECTED_TYPES[detected]
+    : normalizeDocumentType(chosen);
+
 export const normalizeDocumentType = (value) =>
   Object.hasOwn(DOCUMENT_TYPES, value) ? value : "purchase_invoice";
 

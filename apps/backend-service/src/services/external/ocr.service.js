@@ -4,10 +4,14 @@ import { cache } from "../../config/redis.js";
 import { logger } from "../../lib/logger.js";
 import { outboundFetch } from "../../lib/outbound.js";
 import {
+  DOCUMENT_TYPES,
+  EMPTY_DOCUMENT_LINE,
   isQuantifiedDocumentType,
+  normalizeDocumentType,
   normalizeLineItems,
   normalizeQuantity,
   parseDocumentDate,
+  resolveDocumentType,
 } from "./normalization.js";
 
 const MOCK_OCR_RESULTS = [
@@ -31,7 +35,8 @@ export const ocrService = {
       const result = env.USE_MOCK_SERVICES
         ? MOCK_OCR_RESULTS[0]
         : await readDocument(file, meta.file_hash);
-      const documentType = meta.document_type || "purchase_invoice";
+      const chosenType = normalizeDocumentType(meta.document_type);
+      const documentType = resolveDocumentType(chosenType, result.document_type);
       const quantified = isQuantifiedDocumentType(documentType);
       const items = quantified
         ? normalizeLineItems(result).filter((item) => item.quantity > 0)
@@ -50,6 +55,7 @@ export const ocrService = {
           raw_text: result.raw_text,
           extracted_data: {
             document_type: documentType,
+            chosen_type: chosenType,
             detected_type: result.document_type || "unknown",
             file_hash: meta.file_hash || null,
             document_date: parseDocumentDate(fields.invoice_date?.value),
@@ -63,11 +69,18 @@ export const ocrService = {
           status,
           verified_by_user: !quantified,
           requires_human_review: quantified,
-          reasoning: !quantified
-            ? "Stored as supporting evidence. No quantities are taken from this document."
-            : items.length > 0
-              ? "Line items extracted and sent for material classification."
-              : "No line items with quantities were found. Add them during review or delete the document.",
+          reasoning: [
+            documentType !== chosenType
+              ? `Read as a ${DOCUMENT_TYPES[documentType].toLowerCase()} from its contents, not a ${DOCUMENT_TYPES[chosenType].toLowerCase()}.`
+              : null,
+            !quantified
+              ? "Stored as supporting evidence. No quantities are taken from this document."
+              : items.length > 0
+                ? "Line items extracted and sent for material classification."
+                : "No line items with quantities were found. Add them during review or delete the document.",
+          ]
+            .filter(Boolean)
+            .join(" "),
           updated_at: new Date().toISOString(),
         })
         .eq("id", documentId);
@@ -97,7 +110,7 @@ export const ocrService = {
           confidence_score: 0,
           reasoning:
             "No line items were extracted. Enter the material and quantity from the document, or exclude it.",
-          matched_synonym: "Whole document (no line items detected)",
+          matched_synonym: EMPTY_DOCUMENT_LINE,
           requires_human_review: true,
           verified_by_user: false,
         });
@@ -124,7 +137,7 @@ export const ocrService = {
 const OCR_CACHE_SECONDS = 24 * 3600;
 const readDocument = (file, fileHash) =>
   fileHash
-    ? cache.wrap(cache.key("ocr", "v1", fileHash), OCR_CACHE_SECONDS, () => requestOcrService(file))
+    ? cache.wrap(cache.key("ocr", "v2", fileHash), OCR_CACHE_SECONDS, () => requestOcrService(file))
     : requestOcrService(file);
 
 const requestOcrService = async (file) => {
