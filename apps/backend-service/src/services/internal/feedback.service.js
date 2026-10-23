@@ -1,6 +1,10 @@
 import { supabaseAdmin } from "../../config/database.js";
 import { schema } from "../../config/schema.js";
-import { documentTypeOf } from "../external/normalization.js";
+import {
+  EMPTY_DOCUMENT_LINE,
+  documentTypeOf,
+  isQuantifiedDocumentType,
+} from "../external/normalization.js";
 import { badRequest, notFound, unprocessable } from "../../utils/errors.js";
 import { financialYearOf, financialYearRange } from "../external/normalization.js";
 import { PROCESSING_STATUSES, effectiveDate } from "./filing.summary.js";
@@ -18,6 +22,36 @@ export const CPCB_CATEGORIES = [
 ];
 
 const now = () => new Date().toISOString();
+
+export const validateNewLine = (body) => {
+  const description = String(body.description || "").trim();
+  if (!description) throw badRequest("Describe the line as it is written on the document");
+  if (description.length > 200) throw badRequest("Description must be 200 characters or fewer");
+  if (!MATERIAL_CODES.includes(body.material_code)) {
+    throw badRequest(`Material must be one of ${MATERIAL_CODES.join(", ")}`);
+  }
+  const quantity = Number(body.quantity_kg);
+  if (
+    body.quantity_kg == null ||
+    body.quantity_kg === "" ||
+    !Number.isFinite(quantity) ||
+    quantity <= 0
+  ) {
+    throw badRequest("Weight must be a positive number of kilograms");
+  }
+  const category = body.cpcb_category || null;
+  if (category && !CPCB_CATEGORIES.includes(category)) {
+    throw badRequest(`Category must be one of ${CPCB_CATEGORIES.join(", ")}`);
+  }
+  const notes = String(body.notes || "").trim();
+  return {
+    description,
+    material_code: body.material_code,
+    quantity_kg: quantity,
+    cpcb_category: category,
+    notes: notes || null,
+  };
+};
 
 const reviewStamp = async (reviewer) => {
   if (!(await schema()).reviewerIdentity) return {};
@@ -305,6 +339,62 @@ export const feedbackService = {
       approved: approved.length,
       failed: results.filter((r) => !r.success),
     };
+  },
+
+  async addLine(reviewer, documentId, body) {
+    const line = validateNewLine(body);
+    const { data: document } = await supabaseAdmin
+      .from("documents")
+      .select("id, filename, company_id, status, created_at, extracted_data")
+      .eq("id", documentId || null)
+      .eq("company_id", reviewer.id)
+      .maybeSingle();
+
+    if (!document) throw notFound("Document not found");
+    await assertDocumentEditable(reviewer.id, document);
+    if (!isQuantifiedDocumentType(documentTypeOf(document.extracted_data))) {
+      throw badRequest("EPR records are stored as evidence and have no lines");
+    }
+    if (PROCESSING_STATUSES.includes(document.status)) {
+      throw badRequest("Wait for the document to finish processing before adding lines");
+    }
+
+    const { classificationCategory } = await schema();
+    const { data, error } = await supabaseAdmin
+      .from("document_classifications")
+      .insert({
+        document_id: document.id,
+        material_code: line.material_code,
+        quantity_kg: line.quantity_kg,
+        confidence_score: 1,
+        reasoning: "Added by you from the document.",
+        matched_synonym: line.description,
+        requires_human_review: false,
+        verified_by_user: true,
+        reviewer_notes: line.notes,
+        ...(classificationCategory && { cpcb_category: line.cpcb_category }),
+        ...(await reviewStamp(reviewer)),
+      })
+      .select()
+      .single();
+    if (error) throw new Error(`Adding the line failed: ${error.message}`);
+
+    await supabaseAdmin
+      .from("document_classifications")
+      .delete()
+      .eq("document_id", document.id)
+      .eq("matched_synonym", EMPTY_DOCUMENT_LINE)
+      .eq("verified_by_user", false);
+
+    await this.updateDocumentReviewStatus(document.id);
+    await recordDecision(
+      reviewer,
+      { document_id: document.id, documents: document },
+      "line.added",
+      `added ${line.material_code} ${line.quantity_kg} kg`,
+      { to: { material_code: line.material_code, quantity_kg: line.quantity_kg } },
+    );
+    return data;
   },
 
   async getClassification(classificationId, userId) {

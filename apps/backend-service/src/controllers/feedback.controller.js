@@ -26,6 +26,9 @@ export const feedbackController = {
   exclude: handle(async (req) => ({
     data: await feedbackService.exclude(req.params.id, req.user, req.body?.reason),
   })),
+  addLine: handle(async (req) => ({
+    data: await feedbackService.addLine(req.user, req.body?.document_id, req.body || {}),
+  })),
   approveSuggested: handle(async (req) => ({
     data: await feedbackService.approveSuggested(req.user, req.body?.document_id),
   })),

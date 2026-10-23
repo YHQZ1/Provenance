@@ -8,6 +8,7 @@ const router = Router();
 router.use(authenticate, accountLimits);
 
 router.get("/queue", feedbackController.queue);
+router.post("/lines", feedbackController.addLine);
 router.post("/approve-suggested", limits.bulkApprove, feedbackController.approveSuggested);
 router.get("/:id", feedbackController.getById);
 router.post("/:id/approve", feedbackController.approve);

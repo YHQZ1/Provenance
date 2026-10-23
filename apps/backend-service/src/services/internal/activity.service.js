@@ -4,7 +4,13 @@ import { logger } from "../../lib/logger.js";
 
 export const ACTIVITY_GROUPS = {
   documents: ["document.uploaded", "document.deleted", "document.retried", "document.redated"],
-  review: ["line.approved", "line.corrected", "line.excluded", "lines.approved_in_bulk"],
+  review: [
+    "line.approved",
+    "line.corrected",
+    "line.excluded",
+    "line.added",
+    "lines.approved_in_bulk",
+  ],
   filing: ["filing.finalized", "filing.reopened", "obligations.updated"],
   settings: ["company.updated", "trade_name.added", "trade_name.removed"],
 };
