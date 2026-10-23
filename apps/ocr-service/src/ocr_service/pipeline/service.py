@@ -5,7 +5,12 @@ from PIL import Image
 from ocr_service.core.config import settings
 from ocr_service.pipeline.extraction.image import extract_ocr_tokens
 from ocr_service.pipeline.extraction.pdf import extract_pdf_tokens, render_pdf_pages
-from ocr_service.pipeline.parsing import extract_fields, parse_line_items, tokens_to_text
+from ocr_service.pipeline.parsing import (
+    detect_document_type,
+    extract_fields,
+    parse_line_items,
+    tokens_to_text,
+)
 from ocr_service.schemas import BoundingBox, ExtractedField, InvoiceLineItem, OCRResponse, OCRToken
 
 
@@ -53,7 +58,7 @@ class OCRPipeline:
             warnings.append("No text was extracted from the document.")
 
         return OCRResponse(
-            document_type="invoice" if line_items or "invoice" in raw_text.lower() else "unknown",
+            document_type=detect_document_type(raw_text, bool(line_items)),
             filename=filename or path.name,
             pages=max(1, pages),
             raw_text=raw_text,

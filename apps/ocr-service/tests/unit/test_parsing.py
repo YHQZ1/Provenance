@@ -1,4 +1,9 @@
-from ocr_service.pipeline.parsing import extract_fields, parse_line_items, tokens_to_text
+from ocr_service.pipeline.parsing import (
+    detect_document_type,
+    extract_fields,
+    parse_line_items,
+    tokens_to_text,
+)
 
 INVOICE_0_TEXT = """Tax Invoice
 Invoice No:1410515599 Customer No:791114435
@@ -192,3 +197,101 @@ def test_invoice_references_are_not_mistaken_for_dates():
         extract_fields("Invoice No. Dated\n012/20-21 22-Jul-2020", 0.9)["invoice_date"]["value"]
         == "22-Jul-2020"
     )
+
+
+KG_TABLE_TEXT = """# Description of Goods HSN/SAC Quantity Unit Rate (INR) Amount (INR)
+1 LDPE shrink film 80 micron, 450 mm width, natural 3920 10 1,850.00 kg 142.00 2,62,700.00
+Printed laminated pouch film PET/PE 90 micron
+2 3921 90 2,400.00 kg 218.50 5,24,400.00
+(multilayer)
+3 Freight and handling, Mangaluru to Bengaluru 9965 1.00 job 6,200.00 6,200.00
+Total net weight of plastic goods: 4,250.00 kg Total taxable value 7,87,100.00"""
+
+PIECES_TABLE_TEXT = """# Description of Goods HSN/SAC Qty (Nos) Net Wt (kg) Rate/Pc Amount (INR)
+(g)
+HDPE bottle 1000 ml, 38 mm neck,
+1 3923 30 25,000 48 1,200.00 6.10 1,52,500.00
+natural, 48 g
+3 PP flip-top cap 38 mm, 4.2 g 3923 50 65,000 4.2 273.00 0.92 59,800.00
+Total net weight of plastic goods: 1,473.00 kg Total taxable value 2,12,300.00"""
+
+CERTIFICATE_TABLE_TEXT = """# Plastic type Category Period Received (kg) Recycled (kg) Yield Recycled output
+PET bottles Q1 Apr-Jun
+1 Cat. I 5,200.00 4,850.00 93.3% PET flakes
+(post-consumer) 2024
+2 HDPE rigid containers Cat. I Apr-Sep 2025 9,600.00 9,010.00 93.9% HDPE regrind
+Total 14,800.00 13,860.00 93.6%"""
+
+RECEIPT_TABLE_TEXT = """# Material CPCB category Net quantity (kg) Share Handling fee (INR)
+1 PET bottles, baled Category I 1,260.00 43.8% 4,410.00
+2 Multilayer pouches and sachets Category III 355.00 12.3% 1,242.50
+3 Mixed plastic packaging Category I 180.00 6.2% 630.00
+Total 1,795.00 100.0% 6,282.50"""
+
+
+def _summary(items):
+    return [(item["description"], item["quantity"], item["unit"]) for item in items]
+
+
+def test_kg_table_rows_keep_wrapped_descriptions_and_skip_services():
+    items = parse_line_items(KG_TABLE_TEXT, 0.9)
+
+    assert _summary(items) == [
+        ("LDPE shrink film 80 micron, 450 mm width, natural", 1850.0, "kg"),
+        ("Printed laminated pouch film PET/PE 90 micron (multilayer)", 2400.0, "kg"),
+    ]
+
+
+def test_pieces_table_uses_net_weight_not_unit_weight():
+    items = parse_line_items(PIECES_TABLE_TEXT, 0.9)
+
+    assert _summary(items) == [
+        ("HDPE bottle 1000 ml, 38 mm neck, natural, 48 g", 1200.0, "kg"),
+        ("PP flip-top cap 38 mm, 4.2 g", 273.0, "kg"),
+    ]
+
+
+def test_certificate_rows_use_recycled_quantity_and_drop_period_text():
+    items = parse_line_items(CERTIFICATE_TABLE_TEXT, 0.9)
+
+    assert _summary(items) == [
+        ("PET bottles (post-consumer)", 4850.0, "kg"),
+        ("HDPE rigid containers", 9010.0, "kg"),
+    ]
+
+
+def test_receipt_rows_read_net_quantity_for_every_row():
+    items = parse_line_items(RECEIPT_TABLE_TEXT, 0.9)
+
+    assert _summary(items) == [
+        ("PET bottles, baled", 1260.0, "kg"),
+        ("Multilayer pouches and sachets", 355.0, "kg"),
+        ("Mixed plastic packaging", 180.0, "kg"),
+    ]
+
+
+def test_document_type_is_read_from_the_heading():
+    assert (
+        detect_document_type("GreenLoop\nRECYCLING CERTIFICATE\nCertificate No.", True)
+        == "recycling_certificate"
+    )
+    assert (
+        detect_document_type("Swachh\nCOLLECTION RECEIPT\nWeighbridge", True)
+        == "collection_receipt"
+    )
+    assert (
+        detect_document_type("ANNUAL RETURN - EXTENDED PRODUCER RESPONSIBILITY", False)
+        == "epr_record"
+    )
+    assert detect_document_type("Portal\nACKNOWLEDGEMENT\nFiling submitted", False) == "epr_record"
+
+
+def test_a_late_mention_of_certificates_does_not_change_the_type():
+    text = "Aarav Foods\nEPR STATEMENT\nEPR OBLIGATION AND FULFILMENT STATEMENT\n" + "x " * 400
+    text += "Procure Category II recycling certificates"
+    assert detect_document_type(text, True) == "epr_record"
+
+
+def test_document_type_falls_back_to_invoice_then_unknown():
+    assert detect_document_type("Kaveri Flexipack\nTAX INVOICE\nInvoice No. 12", True) == "invoice"
+    assert detect_document_type("Delivery note\n3 boxes", False) == "unknown"

@@ -15,6 +15,58 @@ DATE = (
 
 DATE_LABELS = r"invoice\s*date|inv\.?\s*date|bill\s*date|certificate\s*date|date\s*of\s*issue|dated"
 
+HSN = r"(?<![\d,.])\d{4}(?:\s\d{2})?(?![\d,.])"
+CATEGORY = r"(?:I{1,3}|IV)"
+
+KG_ROW = re.compile(
+    rf"^(?P<n>\d{{1,3}})\s+(?P<description>.*?)\s*(?P<hsn>{HSN})\s+"
+    rf"(?P<quantity>{NUMBER})\s*(?P<unit>{WEIGHT_UNITS})\s+(?P<rate>{NUMBER})\s+(?P<amount>{NUMBER})$",
+    re.I,
+)
+PIECES_ROW = re.compile(
+    rf"^(?P<n>\d{{1,3}})\s+(?P<description>.*?)\s*(?P<hsn>{HSN})\s+"
+    rf"(?P<pieces>{NUMBER})\s+(?P<unit_weight>{NUMBER})\s+(?P<quantity>{NUMBER})\s+"
+    rf"(?P<rate>{NUMBER})\s+(?P<amount>{NUMBER})$",
+    re.I,
+)
+CERTIFICATE_ROW = re.compile(
+    rf"^(?P<n>\d{{1,3}})\s+(?P<description>.*?)\s*Cat\.?\s*{CATEGORY}(?:\s+(?P<period>.+?))?\s+"
+    rf"(?P<received>{NUMBER})\s+(?P<quantity>{NUMBER})\s+\d+(?:\.\d+)?%(?:\s+.*)?$",
+    re.I,
+)
+RECEIPT_ROW = re.compile(
+    rf"^(?P<n>\d{{1,3}})\s+(?P<description>.*?)\s+Category\s+{CATEGORY}\s+"
+    rf"(?P<quantity>{NUMBER})\s+\d+(?:\.\d+)?%\s+(?:{NUMBER})$",
+    re.I,
+)
+TABLE_ROWS = (KG_ROW, PIECES_ROW, CERTIFICATE_ROW, RECEIPT_ROW)
+ROW_BOUNDARY = re.compile(r"^\d{1,3}\s+.*\d$")
+TABLE_HEADER = re.compile(
+    r"description\s+of\s+goods|plastic\s+type|\bmaterial\b.*\bcategory\b|^#\s", re.I
+)
+MONTH = r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*"
+PERIOD_NOISE = re.compile(
+    rf"\bq[1-4](?:\s*-\s*q[1-4])?\b|\b{MONTH}(?:\s*-\s*{MONTH})?\b|\b20\d{{2}}(?:-\d{{2}})?\b", re.I
+)
+HEADER_ARTIFACT = re.compile(r"^\(?[a-z%]{1,4}\)?$", re.I)
+CONTINUATION = re.compile(r"^(?:[a-z(]|\d+\s*[a-z])")
+
+DOCUMENT_TYPE_HEADS = (
+    (
+        "recycling_certificate",
+        re.compile(r"recycling\s+certificate|certificate\s+of\s+recycling", re.I),
+    ),
+    ("collection_receipt", re.compile(r"collection\s+receipt", re.I)),
+    (
+        "epr_record",
+        re.compile(
+            r"annual\s+return|registration\s+certificate|certificate\s+of\s+registration"
+            r"|acknowledg(?:e)?ment|service\s+agreement|obligation\s+and\s+fulfil|epr\s+statement",
+            re.I,
+        ),
+    ),
+)
+
 TOTAL_ROW = re.compile(
     r"^(?:sub[\s-]*total|grand\s+total|total|net\s+(?:amount|total)|amount\s+chargeable)\b", re.I
 )
@@ -79,6 +131,10 @@ def parse_line_items(text: str, average_confidence: float) -> list[dict]:
     lines = [" ".join(line.split()) for line in text.splitlines() if line.strip()]
     lines = [line for line in lines if not TOTAL_ROW.match(line)]
 
+    table_items = _table_items(lines, average_confidence)
+    if table_items:
+        return _deduplicate_items(table_items)
+
     items: list[dict] = []
     table_lines = _append_table_row_items(items, lines, average_confidence)
     remaining = [line for line in lines if line not in table_lines]
@@ -107,6 +163,72 @@ def parse_line_items(text: str, average_confidence: float) -> list[dict]:
     _append_hsn_quantity_items(items, remaining, average_confidence)
     _append_numbered_table_items(items, remaining, average_confidence)
     return _deduplicate_items([item for item in items if not TOTAL_ROW.match(item["description"])])
+
+
+def _is_continuation(line: str) -> bool:
+    return len(line) <= 60 and bool(CONTINUATION.match(line))
+
+
+def _is_boundary(line: str) -> bool:
+    return bool(ROW_BOUNDARY.match(line)) or any(row.match(line) for row in TABLE_ROWS)
+
+
+def _table_items(lines: list[str], confidence: float) -> list[dict]:
+    boundaries = [i for i, line in enumerate(lines) if _is_boundary(line)]
+    matches = {
+        index: next((m for m in (row.match(lines[index]) for row in TABLE_ROWS) if m), None)
+        for index in boundaries
+    }
+
+    trails: dict[int, list[str]] = {}
+    for position, index in enumerate(boundaries):
+        following = boundaries[position + 1] if position + 1 < len(boundaries) else len(lines)
+        trail: list[str] = []
+        if matches[index]:
+            for line in lines[index + 1 : following]:
+                if not _is_continuation(line):
+                    break
+                trail.append(line)
+        trails[index] = trail
+
+    items: list[dict] = []
+    for position, index in enumerate(boundaries):
+        match = matches[index]
+        if not match:
+            continue
+
+        floor = 0
+        if position:
+            previous = boundaries[position - 1]
+            floor = previous + 1 + len(trails[previous])
+        lead: list[str] = []
+        cursor = index - 1
+        while cursor >= floor and index - cursor <= 4 and not TABLE_HEADER.search(lines[cursor]):
+            if not HEADER_ARTIFACT.match(lines[cursor]):
+                lead.insert(0, lines[cursor])
+            cursor -= 1
+        if match.group("description").strip() and lead and not _is_continuation(lead[-1]):
+            lead = [] if len(lead[-1]) > 60 else lead
+
+        parts = [*lead, match.group("description"), *trails[index]]
+        groups = match.groupdict()
+        joined = " ".join(parts)
+        if "received" in groups:
+            joined = PERIOD_NOISE.sub(" ", joined)
+        description = " ".join(joined.split()).strip(" -:.")
+        unit = groups.get("unit") or "kg"
+        rate = groups.get("rate") if "unit" in groups else None
+        items.append(
+            _make_item(
+                description or lines[index],
+                groups["quantity"],
+                unit,
+                rate,
+                lines[index],
+                confidence,
+            )
+        )
+    return items
 
 
 def _append_table_row_items(items: list[dict], lines: list[str], confidence: float) -> set[str]:
@@ -278,3 +400,13 @@ def _find_date_on_invoice_line(text: str) -> str | None:
             if match:
                 return match.group(1)
     return None
+
+
+def detect_document_type(text: str, has_line_items: bool) -> str:
+    head = text[:500]
+    for name, pattern in DOCUMENT_TYPE_HEADS:
+        if pattern.search(head):
+            return name
+    if has_line_items or re.search(r"invoice", text, re.I):
+        return "invoice"
+    return "unknown"
