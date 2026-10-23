@@ -43,7 +43,7 @@ The reporting period is the Indian financial year, April to March. A document be
 | 2. Upload | Drag in documents and choose the type: purchase invoice, recycling certificate, collection receipt or EPR record | Duplicates are rejected by file hash; the file goes to private storage |
 | 3. Read | A progress state per document | OCR extracts text, fields and line items; quantities become kilograms |
 | 4. Suggest | Each line has a suggested material and category, with a confidence and the reason | Trade-name synonym search plus a local language model |
-| 5. Review | One line at a time beside the source document: approve, correct or exclude | Nothing counts until a person decides; who and when are recorded |
+| 5. Review | One line at a time beside the source document: approve, correct or exclude, or add a row the reader missed; the wording follows the document type | Nothing counts until a person decides; who and when are recorded |
 | 6. File | The year's totals, blockers and warnings | Reviewed lines are summed per financial year and ledger (introduced, recycled, collected) |
 | 7. Finalize | Sign off the year and export CSV, JSON or PDF | A snapshot is frozen; the year becomes read-only until reopened |
 | 8. Obligations | What's owed per category, what's covered, and the shortfall | Q = A + B − C with default or company targets |
